@@ -10,6 +10,7 @@ export default function App() {
   const [texto, setTexto] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [motd, setMotd] = useState("");
 
   // useEffect com [] roda uma vez, quando a página abre: busca a lista na API.
   useEffect(() => {
@@ -63,6 +64,17 @@ export default function App() {
     }
   }
 
+  async function atualizarMotd() {
+    try {
+      const resp = await fetch(`${API}/motd`);
+      if (!resp.ok) throw new Error();
+      const dados = await resp.json();
+      setMotd(dados.texto);
+    } catch {
+      setMotd("Não consegui buscar a mensagem.");
+    }
+  }
+
   const feitas = tarefas.filter((t) => t.concluida).length;
 
   return (
@@ -73,6 +85,9 @@ export default function App() {
       </p>
 
       {erro && <p className="erro">{erro}</p>}
+
+      <button onClick={atualizarMotd}>Nova Mensagem</button>
+      {motd && <p>{motd}</p>}
 
       <form onSubmit={adicionar} className="form">
         <input
