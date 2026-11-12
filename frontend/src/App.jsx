@@ -112,13 +112,13 @@ export default function App() {
       {erro && <p className="erro">{erro}</p>}
 
       <div className="motd">
-        <p>{motd || "Clique para ver uma mensagem"}</p>
         <div className="motd-botoes">
           <button onClick={atualizarMotd}>Nova Mensagem</button>
           <button className="secundario" onClick={() => setMostrandoForm(!mostrandoForm)}>
             {mostrandoForm ? "Cancelar": "+ Adicionar"}
           </button>
         </div>
+        <p>{motd || "Clique para ver uma mensagem"}</p>
 
         {mostrandoForm && (
           <form onSubmit={addMotd} className="form">
