@@ -21,7 +21,10 @@ export default function App() {
     try {
       const resp = await fetch(`${API}/tarefas`);
       if (!resp.ok) throw new Error("A API respondeu com erro");
+      const respMotd = await fetch(`${API}/motd`);
+      if (!resp.ok) throw new Error();
       setTarefas(await resp.json());
+      setMotd((await respMotd.json()).texto)
       setErro("");
     } catch (e) {
       setErro("Não consegui falar com a API. Ela está rodando? O CORS está certo?");
