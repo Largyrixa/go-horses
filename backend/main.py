@@ -8,6 +8,7 @@ Rodar local:
 Documentação interativa (gerada sozinha pelo FastAPI): http://localhost:8000/docs
 """
 import os
+import random
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -37,6 +38,12 @@ class TarefaAtualiza(BaseModel):
     titulo: Optional[str] = None
     concluida: Optional[bool] = None
 
+MOTD = [
+    "Três pratos de trigo para três tigres tristes",
+    "Bosta Bosta Bosta",
+    "Silêncio",
+    "Eu gosto de inovar",
+]
 
 # "Banco de dados" em memória: some quando o servidor reinicia.
 # Num hackathon isso costuma bastar; se precisar persistir, troque por SQLite.
@@ -89,3 +96,7 @@ def remover_tarefa(tarefa_id: int):
             tarefas.pop(i)
             return
     raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+@app.get("/motd")
+def motd():
+    return {"texto": random.choice(MOTD)}
