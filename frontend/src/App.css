@@ -31,19 +31,18 @@ h1 { margin: 0; font-size: 2rem; }
 .sub { color: var(--texto-suave); margin: 6px 0 24px; }
 
 /* Mensagem do dia */
-.motd {
-  background: var(--card);
-  border-left: 4px solid var(--destaque);
-  border-radius: var(--raio);
-  box-shadow: var(--sombra);
-  padding: 14px 16px;
-  margin-bottom: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+.motd-botoes { display: flex; gap: 8px; flex-shrink: 0; }
+
+button.secundario {
+  background: transparent;
+  color: var(--primaria);
+  border: 1px solid var(--primaria);
 }
-.motd p { margin: 0; font-style: italic; }
+button.secundario:hover { background: #e8f0ed; }
+
+@media (max-width: 480px) {
+  .motd { flex-direction: column; align-items: flex-start; }
+}
 
 /* Botões */
 button {

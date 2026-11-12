@@ -104,8 +104,11 @@ def remover_tarefa(tarefa_id: int):
 def motd():
     return {"texto": random.choice(MOTD)}
 
-@app.post("/motd")
+@app.post("/motd", status_code = 201)
 def add_motd(motd: MotdNovo):
-    if motd.texto not in MOTD:
-        MOTD.append(motd.texto)
-    return motd
+    texto = motd.texto.strip()
+    if not texto:
+        raise HTTPException(status_code=422, detail="A mensagem não pode ser vazia")
+    elif texto not in MOTD:
+        MOTD.append(texto)
+    return {"texto": texto}

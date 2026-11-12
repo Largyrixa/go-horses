@@ -11,6 +11,8 @@ export default function App() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [motd, setMotd] = useState("\n");
+  const [mostrandoForm, setMostrandoForm] = useState(false);
+  const [novaMotd, setNovaMotd] = useState("");
 
   // useEffect com [] roda uma vez, quando a página abre: busca a lista na API.
   useEffect(() => {
@@ -78,6 +80,26 @@ export default function App() {
     }
   }
 
+  async function addMotd(evento) {
+    evento.preventDefault();
+    if (!novaMotd.trim()) return;
+
+    try {
+      const resp = await fetch(`${API}/motd`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: novaMotd }),
+      });
+      if (!resp.ok) throw new Error();
+      const criada = await resp.json();
+      setMotd(criada.texto);
+      setNovaMotd("");
+      setMostrandoForm(false);
+    } catch {
+      setMotd("Não consegui adicionar a mensagem.");
+    }
+  }
+
   const feitas = tarefas.filter((t) => t.concluida).length;
 
   return (
@@ -89,8 +111,27 @@ export default function App() {
 
       {erro && <p className="erro">{erro}</p>}
 
-      <button onClick={atualizarMotd}>Nova Mensagem</button>
-      {motd && <p>{motd}</p>}
+      <div className="motd">
+        <p>{motd || "Clique para ver uma mensagem"}</p>
+        <div className="motd-botoes">
+          <button onClick={atualizarMotd}>Nova Mensagem</button>
+          <button className="secundario" onClick={() => setMostrandoForm(!mostrandoForm)}>
+            {mostrandoForm ? "Cancelar": "+ Adicionar"}
+          </button>
+        </div>
+
+        {mostrandoForm && (
+          <form onSubmit={addMotd} className="form">
+            <input
+              value={novaMotd}
+              onChange={(e) => setNovaMotd(e.target.value)}
+              placeholder="Escreva sua mensagem..."
+              autoFocus
+            />
+            <button type="submit">Salvar</button>
+          </form>
+        )}
+      </div>
 
       <form onSubmit={adicionar} className="form">
         <input
