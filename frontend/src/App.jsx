@@ -10,7 +10,7 @@ export default function App() {
   const [texto, setTexto] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [motd, setMotd] = useState("");
+  const [motd, setMotd] = useState("\n");
 
   // useEffect com [] roda uma vez, quando a página abre: busca a lista na API.
   useEffect(() => {
