@@ -1,0 +1,62 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f4f1ea;
+  color: #1f2430;
+}
+
+.pagina {
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+h1 { margin: 0; }
+.sub { color: #5b6270; margin: 4px 0 20px; }
+
+.erro {
+  background: #fde8e8;
+  color: #8a1c1c;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.form { display: flex; gap: 8px; margin-bottom: 16px; }
+.form input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #c9c4b8;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.form button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #2f5d50;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.lista { list-style: none; padding: 0; margin: 0; }
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.item label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+.item.feita span { text-decoration: line-through; color: #8a8f99; }
+.remover {
+  border: 0;
+  background: transparent;
+  color: #a33;
+  font-size: 1rem;
+  cursor: pointer;
+}
