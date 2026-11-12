@@ -37,6 +37,9 @@ class TarefaNova(BaseModel):
 class TarefaAtualiza(BaseModel):
     titulo: Optional[str] = None
     concluida: Optional[bool] = None
+    
+class MotdNovo(BaseModel):
+    texto: str
 
 MOTD = [
     "Três pratos de trigo para três tigres tristes",
@@ -100,3 +103,9 @@ def remover_tarefa(tarefa_id: int):
 @app.get("/motd")
 def motd():
     return {"texto": random.choice(MOTD)}
+
+@app.post("/motd")
+def add_motd(motd: MotdNovo):
+    if motd.texto not in MOTD:
+        MOTD.append(motd.texto)
+    return motd
