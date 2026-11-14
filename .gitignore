@@ -14,3 +14,21 @@ id_*
 
 # Capturas de referência do hackathon (não fazem parte do código)
 WhatsApp Image*
+
+# Dependências e artefatos de build
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Arquivos de ambiente (os modelos versionados são *.env.example)
+.env
+.env.local
+.env.*.local
+
+# Uploads locais (backend/uploads/)
+backend/uploads/
+
+# Banco local em arquivo
+*.sqlite3
