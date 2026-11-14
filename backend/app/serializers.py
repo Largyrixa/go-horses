@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from prisma import models
 
@@ -52,6 +53,20 @@ def status_value(auction: models.Auction) -> str:
     return auction.status.value if hasattr(auction.status, "value") else str(auction.status)
 
 
+def asset_path(url: str) -> str:
+    """Converte fotos do próprio storage para caminho relativo.
+
+    O front é sempre servido na mesma origem da API (Vite em dev, Caddy em
+    produção), então `/uploads/...` e `/static/...` funcionam nos dois. Isso
+    também conserta registros antigos que guardaram a origem absoluta
+    (`PUBLIC_BASE_URL`), que quebrariam ao trocar de host/porta.
+    """
+    parts = urlsplit(url)
+    if parts.netloc and parts.path.startswith(("/uploads/", "/static/")):
+        return urlunsplit(("", "", parts.path, parts.query, ""))
+    return url
+
+
 def short_user(user: models.User | None) -> dict[str, Any] | None:
     if user is None:
         return None
@@ -82,7 +97,7 @@ def auction_dict(auction: models.Auction) -> dict[str, Any]:
         "name": item.name,
         "description": item.description,
         "category": item.category,
-        "photos": list(item.photos or []),
+        "photos": [asset_path(p) for p in (item.photos or [])],
         "seller": short_user(seller),
         "status": status_value(auction),
         "starting_price": auction.starting_price_cents,

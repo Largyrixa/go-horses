@@ -17,11 +17,11 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request, Response
 
 from ..config import (
-    PUBLIC_BASE_URL,
     SECRET_KEY,
     UPLOAD_DIR,
     UPLOAD_MAX_BYTES,
 )
+from ..config import public_url as make_public_url
 from ..deps import get_current_user
 from ..errors import ApiError
 from ..schemas import PresignIn
@@ -96,10 +96,8 @@ async def presign(payload: PresignIn, user=Depends(get_current_user)):
 
     key = f"{secrets.token_hex(16)}{ALLOWED_TYPES[content_type]}"
     token = _make_token(key, content_type, payload.size)
-    upload_url = (
-        f"{PUBLIC_BASE_URL}/api/uploads/{key}?token={quote(token)}"
-    )
-    public_url = f"{PUBLIC_BASE_URL}/uploads/{key}"
+    upload_url = make_public_url(f"/api/uploads/{key}?token={quote(token)}")
+    public_url = make_public_url(f"/uploads/{key}")
     return {
         "upload_url": upload_url,
         "public_url": public_url,

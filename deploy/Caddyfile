@@ -15,7 +15,8 @@
 	encode gzip zstd
 
 	# REST + WebSocket + fotos + imagens de demonstração.
-	@backend path /api/* /uploads/* /static/* /health
+	# Os caminhos "sem barra" cobrem requisições exatas (ex.: /health).
+	@backend path /api /api/* /uploads /uploads/* /static /static/* /health
 	handle @backend {
 		reverse_proxy 127.0.0.1:8088
 	}
