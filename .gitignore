@@ -1,11 +1,16 @@
+# Segredos e arquivos sensíveis
 */.env
-
-# Segredos: nunca versionar
-.chave
 .env
+.chave
 *.pem
 *.key
 id_*
 
 # Logs do deploy
 *.log
+
+# Arquivos locais de editor
+.vscode/
+
+# Capturas de referência do hackathon (não fazem parte do código)
+WhatsApp Image*

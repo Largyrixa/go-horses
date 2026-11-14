@@ -1,125 +1,464 @@
-# Go Horses – projeto de treino (FastAPI + React + Vercel)
+# Go Horses — Leilão Online (Hackathon)
 
-Uma lista de tarefas simples com **API em FastAPI** e **front em React (Vite)**.
-O objetivo não é o app em si, e sim ensaiar o fluxo completo do hackathon:
-criar → rodar local → integrar front e back → publicar → trabalhar em time com Git.
+Plataforma de leilão online em tempo real: o comitente anuncia um item, os
+compradores disputam lances ao vivo e o leilão abre/fecha sozinho, com vencedor.
+O **frontend** já estava prototipado; este repositório agora tem também o
+**backend completo** (FastAPI + Prisma + PostgreSQL), com banco populado para demo.
+
+- **Produção prevista na VM:** <http://200.18.99.113:8028>
+  (a porta pública 8028 é encaminhada para a **8080** dentro da VM; ver [Deploy](#deploy-na-vm))
+- **API local:** <http://localhost:8088>
+- **Documentação interativa (Swagger):** <http://localhost:8088/docs>
+- **Frontend local:** <http://localhost:8080>
+
+> **Portas:** frontend **8080**, backend **8088** e PostgreSQL **5432**.
+> O 3306 é a porta padrão do MySQL; como o banco aqui é PostgreSQL, usamos 5432.
 
 ```
-gohorses-treino/
-├── backend/    API em FastAPI (Python)
-└── frontend/   Interface em React + Vite (JavaScript)
+navegador
+   │  http://200.18.99.113:8028  (port-forward para 8080)
+   ▼
+┌───────────────────────────── VM ─────────────────────────────┐
+│ Caddy :8080                                                  │
+│   ├── /            → frontend React (dist)                   │
+│   ├── /api/        → uvicorn 127.0.0.1:8088 (REST + WS)      │
+│   ├── /uploads/    → fotos enviadas                          │
+│   └── /static/     → imagens de demonstração                 │
+│                                                              │
+│ uvicorn :8088 (FastAPI) ── Prisma ── PostgreSQL :5432        │
+└──────────────────────────────────────────────────────────────┘
 ```
-
-## Pré-requisitos
-
-- Python 3.9+ e `pip`
-- Node.js 18+ e `npm`
-- Git e conta no GitHub
-- Conta na Vercel e na Render (podem entrar com o GitHub)
 
 ---
 
-## Parte 1 – Rodar o back-end (10 min)
+## 1. Rodar do zero (local)
+
+Pré-requisitos: **Python 3.11+**, **Node 18+**, **PostgreSQL 14+** (ou Docker).
+O Prisma usa Node para gerar o client.
+
+### 1.1 Banco de dados
+
+Com Docker (mais simples):
+
+```bash
+docker compose up -d db
+```
+
+Sem Docker, crie um banco/usuário no Postgres local:
+
+```sql
+CREATE USER gohorses WITH PASSWORD 'gohorses';
+CREATE DATABASE gohorses OWNER gohorses;
+```
+
+A URL padrão em `backend/.env` é
+`postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public`.
+Se usar outro usuário/porta, ajuste `DATABASE_URL`.
+
+### 1.2 Backend
 
 ```bash
 cd backend
+cp .env.example .env          # ajuste DATABASE_URL se precisar
 python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+
+prisma generate               # gera o client Python a partir do schema
+prisma db push                # cria as tabelas no Postgres
+python seed.py                # popula contas e leilões de demonstração
+
+uvicorn app.main:app --reload --port 8088
 ```
 
-Abra http://localhost:8000/docs. O FastAPI gera uma página para testar cada rota.
-Teste `GET /tarefas` e `POST /tarefas` por ali antes de mexer no front.
+Se `prisma` não for encontrado mesmo com a venv ativa:
 
-Rotas:
+```bash
+PATH="$PWD/.venv/bin:$PATH" .venv/bin/prisma generate
+PATH="$PWD/.venv/bin:$PATH" .venv/bin/prisma db push
+```
 
-| Método | Rota             | O que faz                         |
-|--------|------------------|-----------------------------------|
-| GET    | `/tarefas`       | lista as tarefas                  |
-| POST   | `/tarefas`       | cria (`{"titulo": "..."}`)        |
-| PATCH  | `/tarefas/{id}`  | atualiza `titulo` e/ou `concluida`|
-| DELETE | `/tarefas/{id}`  | remove                            |
+Atalho com Make (na raiz, depois de subir o banco):
 
-## Parte 2 – Rodar o front-end (10 min)
+```bash
+make setup   # instala, gera o client, cria as tabelas e roda o seed
+make api     # sobe a API em :8088
+```
 
-Em **outro terminal**, com a API ainda rodando:
+### 1.3 Frontend
+
+Em outro terminal:
 
 ```bash
 cd frontend
-cp .env.example .env
+cp env.example .env.local
 npm install
 npm run dev
 ```
 
-Abra http://localhost:5173. Adicione, marque e remova tarefas.
-Se aparecer "Não consegui falar com a API", veja a seção de problemas comuns.
+Abra <http://localhost:8080>. O Vite faz proxy de `/api` (REST + WebSocket)
+para `http://127.0.0.1:8088`, então não há CORS no caminho de desenvolvimento.
 
-## Parte 3 – Entender o código (30 min)
+### 1.4 Contas de demonstração
 
-Leia nesta ordem, com o app aberto ao lado:
+Senha de todas: **`senha1234`**
 
-1. `frontend/src/Tarefa.jsx` – um **componente** com **props** (o menor exemplo).
-2. `frontend/src/App.jsx` – **estado** (`useState`), busca inicial (`useEffect` + `fetch`),
-   e como cada ação chama a API e atualiza o estado.
-3. `backend/main.py` – como o FastAPI recebe JSON, valida e responde, e por que existe o CORS.
+| E-mail | Papel | Observação |
+|---|---|---|
+| `ana@go-horses.dev` | comitente | anuncia itens |
+| `bruno@go-horses.dev` | comprador | já lidera um leilão em andamento |
+| `carla@go-horses.dev` | compradora | conta antiga (200 dias), testa pontuação |
+| `diego@go-horses.dev` | comprador | venceu um leilão |
+| `elisa@go-horses.dev` | comitente | anuncia itens |
 
-Regra de ouro do React: **nunca modifique o estado direto**. Crie uma cópia
-(`[...tarefas, nova]`, `tarefas.map(...)`, `tarefas.filter(...)`) e passe para o `setTarefas`.
+O seed cria 6 leilões: **em andamento com lances**, **agendado (abre em 3 min)**,
+**em andamento sem lances**, **vendido**, **encerrado sem lances** e **cancelado**.
+As fotos são SVGs locais em `backend/static/demo/` (funcionam sem internet).
 
-## Parte 4 – Git em time (20 min, os três juntos)
+Para resetar os dados a qualquer momento:
 
-1. Uma pessoa cria o repositório no GitHub e sobe este projeto.
-2. As outras clonam (`git clone ...`).
-3. Cada um cria uma branch (`git checkout -b minha-feature`), faz uma mudança pequena e abre um Pull Request.
-4. Provoquem um conflito de propósito (dois mexendo na mesma linha de `App.css`) e resolvam juntos.
-   É melhor errar aqui do que no sábado.
+```bash
+cd backend && .venv/bin/python seed.py
+# ou, na raiz:
+make reset
+```
 
-## Parte 5 – Publicar (30–40 min)
-
-A ordem importa: primeiro a API, depois o front, depois o CORS.
-
-### 5.1 API na Render
-
-1. Em render.com: **New → Web Service**, conecte o repositório.
-2. **Root Directory:** `backend`
-3. **Build Command:** `pip install -r requirements.txt`
-4. **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Plano gratuito. Anote a URL gerada (ex.: `https://gohorses-api.onrender.com`).
-   Atenção: no plano gratuito a API "dorme" após um tempo sem uso e a primeira
-   requisição pode demorar cerca de um minuto. Abra a URL uns minutos antes de uma demo.
-
-### 5.2 Front na Vercel
-
-1. Em vercel.com: **Add New → Project**, importe o mesmo repositório.
-2. **Root Directory:** `frontend` (a Vercel detecta Vite sozinha).
-3. Em **Environment Variables**, crie `VITE_API_URL` com a URL da API da Render (sem `/` no final).
-4. **Deploy.** Anote a URL (ex.: `https://gohorses-treino.vercel.app`).
-
-### 5.3 Liberar o CORS
-
-Na Render, em **Environment**, crie `CORS_ORIGINS` com a URL do front na Vercel
-e faça um novo deploy da API. Sem isso o navegador bloqueia as chamadas.
-
-Pronto: a cada `git push` na branch principal a Vercel e a Render publicam de novo sozinhas.
+> O seed **apaga** os dados atuais. Use só em desenvolvimento.
 
 ---
 
-## Problemas comuns
+## 2. Como testar
 
-- **"Não consegui falar com a API"** – a API está rodando? Abra o DevTools (F12) → aba
-  Console. Mensagem com "CORS" quer dizer que falta configurar `CORS_ORIGINS`.
-- **Front na Vercel chama `localhost`** – faltou a variável `VITE_API_URL`. Cadastre e
-  faça **Redeploy**: variáveis do Vite são lidas na hora do build.
-- **Deu 404 ou tela em branco na Vercel** – confira se o *Root Directory* é `frontend`.
-- **Primeira chamada na Render demora muito** – é a API acordando (plano gratuito).
-- **Os dados somem** – a lista fica em memória e zera quando a API reinicia. É proposital
-  para simplificar. Se precisar persistir no hackathon, o caminho mais curto é SQLite.
+1. Abra <http://localhost:8088/docs> e teste as rotas direto no Swagger.
+2. No front, entre como `ana@go-horses.dev` e anuncie um item com **3 fotos**,
+   início em **1 minuto** e duração de **3 minutos** (atalhos da tela).
+3. Entre como `bruno@go-horses.dev` e dê lances na sala. Abra outra janela
+   anônima como `carla@go-horses.dev` para ver o tempo real, o líder mudando e
+   o aviso de "lance superado".
+4. Deixe o leilão terminar: ele fecha sozinho como **Vendido** (com vencedor)
+   ou **Encerrado sem lances**. Reinicie a API no meio de um leilão para ver a
+   recuperação automática (RF18).
 
-## Desafios extras (se sobrar tempo)
+Exemplo de lance via `curl` (o `Idempotency-Key` é obrigatório — RF12):
 
-1. Campo de **prioridade** (alta, média, baixa) na tarefa: mude a API e o front.
-2. **Filtro** "todas / pendentes / concluídas" só no front.
-3. Persistir com **SQLite** no back-end.
-4. Chamar uma **API externa** (por exemplo, uma de IA) a partir da API e exibir o resultado.
-5. Trocar o visual usando uma biblioteca de componentes (Bootstrap ou Tailwind).
+```bash
+TOKEN=$(curl -s http://localhost:8088/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"bruno@go-horses.dev","password":"senha1234"}' | jq -r .token)
+
+AUCTION=$(curl -s 'http://localhost:8088/api/auctions?status=running' | jq -r '.items[0].id')
+
+curl -s -X POST "http://localhost:8088/api/auctions/$AUCTION/bids" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: tente-1' \
+  -d '{"amount": 30500}' | jq
+```
+
+Reenvie o mesmo `Idempotency-Key` e o servidor devolve **o mesmo lance**
+(`"replayed": true`), sem duplicar. Mande o mesmo key com valor diferente: a
+resposta original é mantida (RF12).
+
+---
+
+## 3. O que foi implementado
+
+Referência: `Requisitos_Leilao_Hackathon.pdf`.
+
+### Núcleo (obrigatório)
+
+| Requisito | Como está |
+|---|---|
+| RF01 contas | cadastro/login com e-mail único, senha com scrypt |
+| RF02 sessão | token opaco com hash no banco, expira em 7 dias; 401 encerra |
+| RF03 comprador/comitente | todo usuário logado pode anunciar; sem administrador |
+| RF04 listagem pública / sala privada | leilões públicos; sala exige Bearer; comitente não dá lance |
+| RF05 leilão + fotos | nome, descrição, categoria, 3–10 fotos, preço inicial, início e duração |
+| RF06 limites fáceis de alterar | constantes em `backend/app/config.py` |
+| RF07 fotos | validação de tipo/tamanho; upload direto (storage local, ver decisões) |
+| RF08 cancelamento | só o comitente; Agendado ou Em andamento sem lances; vira Cancelado |
+| RN01 ciclo de vida | 5 estados e transições válidas; com lances só termina Vendido |
+| RF09 sala em tempo real | WebSocket `/api/auctions/{id}/ws` com reconexão e ressincronização |
+| RF10 lances | valida sessão, sala, estado, horário, comitente, líder, preço e crédito |
+| RF11 concorrência | `SELECT ... FOR UPDATE` no Postgres serializa lances do leilão |
+| RF12 idempotência | `Idempotency-Key` único por leilão; reenvio devolve o original |
+| RF14 lance mínimo | calculado só no servidor, por faixa de preço (tabela do documento) |
+| RF15 prorrogação | lance nos últimos 2 min empurra o fim para +2 min, máx. 30 min |
+| RF16 relógio | horários UTC, `server_time` nas respostas, decisão no servidor |
+| RF17 fechamento automático | processo de fundo a cada 0,5 s fecha com/sem vencedor |
+| RF18 reinício | transições no banco; ao subir, abre/fecha o que passou |
+| RF19 dinheiro/fuso | centavos inteiros; ISO UTC; formatação no navegador |
+| RF20 listagem | pública, paginada (12), padrão Agendados + Em andamento |
+| RNF01 hospedagem | guia completo da VM + Caddy + systemd em `deploy/` |
+| RNF02 fluxos pela web | tudo que o Núcleo exige tem tela no front |
+| RNF03 recriar do zero | este README |
+| RNF04 dados de demo | `backend/seed.py` (5 contas, 6 leilões em estados diferentes) |
+
+### Nível 2 / bônus (parcial, backend)
+
+- RF13: limite de 500 ms entre lances do mesmo usuário (reenvio idempotente não é punido).
+- RF21: busca combinável por trecho do nome, categoria e estado.
+- RF22: perfil público em `GET /api/users/{id}` (sem e-mail) — ainda sem tela.
+- RF24: reconexão automática do WebSocket e estado ressincronizado.
+- RF25/RF26: espectador, contagem de participantes/espectadores e aviso de superado.
+- RF27: "Minhas participações" com situação `leader` / `outbid` / `won`.
+- RF29–RF32: pontuação e crédito calculados em `/api/auth/me`; dados de demo com
+  rendas diferentes. A **exigência** de crédito no lance fica desligada por
+  padrão (`ENFORCE_CREDIT=false`), porque o front atual não coleta renda.
+  Ligue com `ENFORCE_CREDIT=true` para testar o bônus.
+
+**Fora do escopo desta entrega:** edição de leilão (RF23), relistagem (RF28),
+tela de perfil público, avaliações/reputação e administração (não existem no edital).
+
+---
+
+## 4. Contrato da API
+
+Base: `/api`. Dinheiro em **centavos inteiros**; datas em **ISO UTC**;
+autenticação `Authorization: Bearer <token>`. Erros:
+`{"error": {"code": "...", "message": "...", "min_bid": 30500}}`.
+
+| Método | Rota | Auth | O que faz |
+|---|---|---|---|
+| POST | `/auth/register` | — | `{display_name,email,password}` → 201 (409 e-mail repetido) |
+| POST | `/auth/login` | — | `{email,password}` → `{token,user}` |
+| POST | `/auth/logout` | sim | encerra a sessão |
+| GET | `/auth/me` | sim | usuário + pontuação/crédito |
+| GET | `/categories` | — | lista de categorias |
+| GET | `/auctions?q&category&status&page` | — | `{items,has_more,server_time}` |
+| GET | `/auctions/{id}` | — | detalhe público |
+| POST | `/auctions` | sim | cria item + leilão (201) |
+| POST | `/auctions/{id}/cancel` | sim | cancela (comitente; regras RF08) |
+| GET | `/auctions/{id}/room` | sim | estado da sala + últimos lances |
+| POST | `/auctions/{id}/bids` | sim | `{amount}` + `Idempotency-Key` → 201 `{bid,auction}` |
+| GET | `/me/auctions` | sim | meus leilões |
+| GET | `/me/participations` | sim | `[{auction,situation,my_top_bid}]` |
+| GET | `/users/{id}` | — | perfil público do comitente (RF22) |
+| POST | `/uploads/presign` | sim | `{filename,content_type,size}` → `{upload_url,public_url}` |
+| PUT | URL retornada | assinatura | envia o arquivo |
+| WS | `/auctions/{id}/ws?token=&role=participant\|spectator` | token | sala ao vivo |
+| GET | `/health` | — | checagem da API + banco |
+
+Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
+
+---
+
+## 5. Decisões da equipe (seção 8 do edital)
+
+- **Tempo real:** WebSocket com reconexão exponencial (1–8 s) no cliente; ao
+  reconectar, um GET da sala ressincroniza o estado. Simples e suficiente para
+  uma VM, sem broker externo.
+- **Concorrência:** lock de linha (`SELECT ... FOR UPDATE`) na transação do
+  lance. O primeiro a chegar tem prioridade; o segundo relê o preço já atualizado
+  e é recusado se ficou abaixo do mínimo. Custo: lances do mesmo leilão
+  serializam no banco (aceitável na escala do hackathon).
+- **Idempotência:** chave gerada no navegador por tentativa/valor, única por
+  leilão. Reenvio devolve o resultado original; nunca cria segundo lance.
+- **Prorrogação:** 2 minutos a partir do lance, no máximo 30 minutos acumulados,
+  conforme referência do documento. O término é gravado no banco (`ends_at`),
+  então reinício não perde prorrogação.
+- **Relógio:** o servidor é a única fonte da verdade. O front só desenha a
+  contagem; um lance atrasado é recusado mesmo com o contador em tela.
+- **Fechamento:** processo de fundo no próprio FastAPI (a cada 0,5 s) em vez de
+  cron. Um `UPDATE` condicional atômico garante que fechar duas vezes não
+  duplica nem sobrescreve resultado.
+- **Dinheiro:** inteiros em centavos do começo ao fim; nada de float.
+- **Fotos:** o edital pede storage em nuvem, mas não houve credenciais na VM.
+  A entrega usa disco local atrás do contrato de presign (`/api/uploads/presign`
+  + `PUT` assinado), servido pelo Caddy. Trocar por S3/R2 significa mudar só
+  `backend/app/routers/uploads.py`; o front não muda.
+- **Sessão:** token opaco de 7 dias com hash no banco (permite logout real e
+  revogação), em vez de JWT sem estado.
+- **Um worker no uvicorn:** as contagens de participantes/espectadores são em
+  memória por processo. Com vários workers os lances continuam corretos, mas
+  cada socket aparece só no processo que o atende.
+- **README:** publicado, com contas de demo, como recriar do zero e estas
+  decisões — como o edital exige.
+
+---
+
+## 6. Variáveis de ambiente
+
+### Backend (`backend/.env`)
+
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public` | conexão do Prisma |
+| `SECRET_KEY` | — | assina URLs de upload; troque em produção |
+| `CORS_ORIGINS` | `http://localhost:8080,...` | origens liberadas (separadas por vírgula) |
+| `PUBLIC_BASE_URL` | `http://localhost:8088` | base das URLs públicas de fotos |
+| `UPLOAD_DIR` | `./uploads` | pasta dos arquivos enviados |
+| `UPLOAD_MAX_BYTES` | `5242880` | tamanho máximo por foto (5 MB) |
+| `SESSION_TTL_DAYS` | `7` | validade da sessão |
+| `ENFORCE_CREDIT` | `false` | liga a exigência de crédito do bônus (RF32) |
+| `SYNC_INTERVAL_SECONDS` | `0.5` | intervalo do abridor/fechador automático |
+
+### Frontend (`frontend/.env.local`)
+
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `VITE_API_URL` | vazio | vazio = `/api` na mesma origem (proxy do Vite/Caddy) |
+| `VITE_PROXY_TARGET` | `http://127.0.0.1:8088` | destino do proxy em dev |
+| `VITE_WS_URL` | vazio | vazio = mesma origem da API |
+| `VITE_MIN_PHOTOS` / `VITE_MAX_PHOTOS` | `3` / `10` | limites no formulário |
+| `VITE_MAX_PHOTO_MB` | `5` | tamanho máximo no formulário |
+
+**Correção feita no `env.example`:** o arquivo antigo apontava
+`VITE_PROXY_TARGET=http://localhost:8080`, mas **8080 é a porta interna do front
+na VM**, não a da API. O backend roda em **8088**, então o proxy foi corrigido.
+`VITE_API_URL` vazio é intencional: em dev o Vite faz proxy; em produção o Caddy
+faz o mesmo, o que evita CORS e URL fixa no bundle. Deixe vazio também no build
+da VM.
+
+---
+
+## 7. Deploy na VM
+
+Informações das imagens do WhatsApp: IP público **200.18.99.113**, equipe
+**Go Horses = porta 8028**, o frontend **obrigatoriamente escuta na 8080**
+dentro da VM; o port-forward da organização leva `8028 → 8080`. O acesso SSH
+usa a porta e a chave enviadas ao capitão por e-mail (o slide mostra
+`ssh -i ~/.ssh/hackaton -p <porta> ubuntu@200.18.99.113`).
+
+### 7.1 Pacotes e banco
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv python3-pip postgresql caddy nodejs npm git
+sudo -u postgres psql -c "CREATE USER gohorses WITH PASSWORD 'gohorses';"
+sudo -u postgres psql -c "CREATE DATABASE gohorses OWNER gohorses;"
+```
+
+### 7.2 Código e backend
+
+```bash
+sudo mkdir -p /opt/gohorses && sudo chown -R ubuntu:ubuntu /opt/gohorses
+git clone <URL_DO_REPOSITORIO> /opt/gohorses
+cd /opt/gohorses/backend
+
+cp .env.example .env
+nano .env
+# DATABASE_URL="postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public"
+# PUBLIC_BASE_URL="http://200.18.99.113:8028"
+# CORS_ORIGINS="http://200.18.99.113:8028"
+# SECRET_KEY="<uma string longa aleatória>"
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+prisma generate
+prisma db push
+python seed.py
+```
+
+Instale o serviço:
+
+```bash
+sudo cp /opt/gohorses/deploy/gohorses-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gohorses-api
+curl http://127.0.0.1:8088/api/health
+```
+
+### 7.3 Frontend + Caddy
+
+```bash
+cd /opt/gohorses/frontend
+npm ci
+# VITE_API_URL e VITE_WS_URL vazios: mesma origem via Caddy
+npm run build
+
+sudo mkdir -p /var/www/gohorses/frontend
+sudo cp -r dist /var/www/gohorses/frontend/
+# O Caddy roda como usuário caddy e precisa ler os arquivos estáticos:
+sudo chmod -R a+rX /var/www/gohorses/frontend/dist
+
+# Se o nginx estiver instalado na VM, desligue para não disputar a 8080:
+sudo systemctl disable --now nginx 2>/dev/null || true
+
+sudo cp /opt/gohorses/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl enable --now caddy
+sudo systemctl reload caddy
+```
+
+Abra <http://200.18.99.113:8028>. O `Caddy` escuta **8080** na VM; a
+organização encaminha a **8028** pública para ela.
+
+> **Fotos:** `PUBLIC_BASE_URL` precisa ser a URL pública para os links das fotos
+> funcionarem. Se mudar esse valor depois do seed, rode `python seed.py` de novo.
+>
+> **WebSocket:** o `reverse_proxy` do Caddy já trata `Upgrade`/`Connection`
+> automaticamente; não precisa de configuração extra para a sala.
+>
+> **Caddy no Arch:** `sudo pacman -S caddy` e o arquivo também fica em
+> `/etc/caddy/Caddyfile`.
+>
+> **Caddy em Ubuntu:** se o pacote não estiver no repositório padrão, use o
+> repositório oficial em <https://caddyserver.com/docs/install#debian-ubuntu-raspbian>.
+
+### 7.4 Atualizar uma nova versão
+
+```bash
+cd /opt/gohorses
+git pull
+cd backend && source .venv/bin/activate && pip install -r requirements.txt
+prisma db push
+sudo systemctl restart gohorses-api
+
+cd ../frontend && npm ci && npm run build
+sudo rm -rf /var/www/gohorses/frontend/dist
+sudo cp -r dist /var/www/gohorses/frontend/
+sudo chmod -R a+rX /var/www/gohorses/frontend/dist
+# Se o Caddyfile mudou:
+sudo cp /opt/gohorses/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+---
+
+## 8. Estrutura do repositório
+
+```
+go-horses/
+├── backend/
+│   ├── app/
+│   │   ├── main.py              FastAPI, CORS, ciclo de vida, ticker
+│   │   ├── auction_service.py   regras: lances, ciclo, crédito, sync
+│   │   ├── realtime.py          salas WebSocket
+│   │   ├── serializers.py       modelo Prisma → JSON do front
+│   │   ├── security.py          scrypt + tokens de sessão
+│   │   ├── config.py            env e limites
+│   │   ├── schemas.py           entrada Pydantic
+│   │   ├── errors.py            erros no formato do front
+│   │   ├── deps.py              Bearer/sessão
+│   │   └── routers/             auth, auctions, me, uploads
+│   ├── prisma/schema.prisma     User, Session, Item, Auction, Bid
+│   ├── static/demo/             fotos SVG do seed
+│   ├── seed.py                  dados de demonstração
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/                    protótipo React/Vite já existente
+├── deploy/                      Caddyfile + systemd da VM
+├── docker-compose.yml           Postgres local
+├── Makefile
+└── README.md
+```
+
+---
+
+## 9. Problemas comuns
+
+| Sintoma | Causa / solução |
+|---|---|
+| `prisma-client-py: command not found` | Ative a venv ou use `PATH="$PWD/.venv/bin:$PATH" .venv/bin/prisma generate` |
+| `Can't reach database server` | Postgres não subiu ou `DATABASE_URL` errada (`docker compose up -d db`) |
+| `DATABASE_URL não configurada` | Falta `backend/.env`; copie do `.env.example` |
+| Front chama API e dá erro de rede | Backend está em `:8088`? O proxy do Vite aponta para lá |
+| Erro de CORS no navegador | Em dev use o proxy; se chamar a API direto, inclua a origem em `CORS_ORIGINS` |
+| Fotos não aparecem | `PUBLIC_BASE_URL` errado ou Caddy sem proxy para `/uploads/` e `/static/` |
+| Sala não atualiza | WebSocket bloqueado: veja `journalctl -u caddy -f`; o Caddy já faz o upgrade sozinho |
+| `401` e volta ao login | Sessão expirou (7 dias) ou usuário fez logout em outra aba |
+| Reiniciei e o leilão fechou | Correto: RF18 manda abrir/fechar o que passou do horário |
+| Seed sem fotos | As imagens são locais; o `PUBLIC_BASE_URL` precisa apontar para o backend/Caddy |

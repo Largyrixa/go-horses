@@ -1,23 +1,23 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 
 // Em dev, /api (REST e WebSocket) é repassado ao back-end: sem CORS e sem URL fixa no código.
-// O rewrite remove o /api, igual ao Caddy em produção (handle_path) — o backend
-// sempre recebe as rotas sem prefixo (ex.: /leiloes).
-const target = process.env.VITE_PROXY_TARGET || "http://localhost:8088";
+// Use 127.0.0.1 (não "localhost"): no Node moderno, "localhost" pode resolver para ::1
+// enquanto o uvicorn escuta em 127.0.0.1, causando ECONNREFUSED no proxy.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const target = env.VITE_PROXY_TARGET || "http://127.0.0.1:8088";
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  server: {
-    proxy: {
-      "/api": {
-        target,
-        ws: true,
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
+  return {
+    plugins: [react()],
+    resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+    server: {
+      host: "0.0.0.0",
+      port: 8080,
+      strictPort: true,
+      proxy: { "/api": { target, ws: true, changeOrigin: true } },
     },
-  },
+    preview: { port: 8080, strictPort: true },
+  };
 });
