@@ -1,2 +1,11 @@
 */.env
 
+# Segredos: nunca versionar
+.chave
+.env
+*.pem
+*.key
+id_*
+
+# Logs do deploy
+*.log

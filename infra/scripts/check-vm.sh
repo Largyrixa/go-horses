@@ -12,9 +12,11 @@ if id -nG | tr ' ' '\n' | grep -qx docker; then
 else
   echo "usuário no grupo docker: NÃO (use sudo, ou: sudo usermod -aG docker \$USER e relogue)"
 fi
-echo "== Portas internas (8080 = proxy/front, 8028 = API) =="
+echo "== Portas da VM =="
+echo "  público 8088 -> VM:8080 (Caddy) | público 8028 -> VM:22 (SSH)"
+echo "  front:8080 e api:8088 rodam internos no Docker; não devem aparecer publicados aqui."
 if command -v ss >/dev/null 2>&1; then
-  for p in 8080 8028; do
+  for p in 8080 22; do
     if ss -ltn | grep -q ":$p "; then echo "$p: EM USO"; else echo "$p: livre"; fi
   done
 else

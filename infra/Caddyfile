@@ -1,13 +1,11 @@
-:80 {
-	handle /api/* {
-		reverse_proxy api:8028
+:8088 {
+	# handle_path remove o prefixo /api antes de repassar ao backend:
+	# o navegador pede /api/leiloes e o FastAPI recebe /leiloes.
+	handle_path /api/* {
+		reverse_proxy api:8088
 	}
-	handle /ws* {
-		reverse_proxy api:8028
-	}
+	# Todo o resto é o front (SPA do Vite servida pelo nginx).
 	handle {
-		root * /srv
-		try_files {path} /index.html
-		file_server
+		reverse_proxy front:8080
 	}
 }
