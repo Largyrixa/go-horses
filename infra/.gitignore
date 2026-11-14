@@ -1,0 +1,10 @@
+# Segredos: nunca versionar
+.env
+*.pem
+*.key
+id_*
+
+# Gerados
+node_modules/
+__pycache__/
+frontend/node_modules/

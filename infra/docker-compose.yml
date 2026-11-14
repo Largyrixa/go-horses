@@ -1,0 +1,65 @@
+# Sobe o ambiente inteiro com:  docker compose up -d --build
+#
+# Uma única porta pública: 8088 (a organização encaminha 8088 -> 8080 da VM).
+#
+#   navegador ──► :8088 ──► VM:8080 ──► proxy (Caddy)
+#                                         ├─ /api/*  e  /ws*  ──► api (HTTP + WebSocket)
+#                                         └─ todo o resto     ──► front compilado
+#                                       api/worker ──► db (Postgres, sem porta pública)
+#
+# Front e API ficam na mesma origem: o front chama caminhos relativos ("/api/...")
+# e não existe CORS para configurar.
+
+services:
+  proxy:
+    image: caddy:2
+    ports: ["8080:80"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv:ro        # pasta gerada por "npm run build"
+    depends_on: [api]
+    restart: unless-stopped
+
+  api:
+    build: ./backend                   # precisa ter um Dockerfile; o app escuta em $PORT
+    env_file: .env
+    environment:
+      PORT: "8028"
+      DATABASE_URL: postgres://leilao:${DB_PASSWORD}@db:5432/leilao
+      TZ: UTC
+    ports: ["127.0.0.1:8028:8028"]     # só para testar de dentro da VM (curl localhost:8028)
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Processo de fundo que abre/fecha leilões (RF17/RF18). Descomente quando existir.
+  # Pode usar a mesma imagem da API com outro comando.
+  # worker:
+  #   build: ./backend
+  #   command: ["<comando do worker>"]
+  #   env_file: .env
+  #   environment:
+  #     DATABASE_URL: postgres://leilao:${DB_PASSWORD}@db:5432/leilao
+  #     TZ: UTC
+  #   depends_on:
+  #     db: { condition: service_healthy }
+  #   restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: leilao
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: leilao
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leilao -d leilao"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

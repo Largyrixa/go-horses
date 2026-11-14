@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teste de infra</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 48px auto; padding: 0 16px; }
+    .ok { color: #1a7f4b; } .erro { color: #b33a3a; }
+  </style>
+</head>
+<body>
+  <!-- PLACEHOLDER: será substituído pelo build do front real. -->
+  <h1>Front no ar</h1>
+  <p id="resultado">Testando a API em /api/health ...</p>
+  <script>
+    // Front e API ficam na mesma origem: o caminho é relativo, sem IP nem porta.
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((d) => {
+        const el = document.getElementById("resultado");
+        el.className = "ok";
+        el.textContent = `API respondeu: ${JSON.stringify(d)}`;
+      })
+      .catch((e) => {
+        const el = document.getElementById("resultado");
+        el.className = "erro";
+        el.textContent = `Não consegui falar com /api/health (${e.message})`;
+      });
+  </script>
+</body>
+</html>
