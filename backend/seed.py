@@ -18,7 +18,7 @@ from datetime import timedelta
 
 from prisma.enums import AuctionStatus
 
-from app.config import CATEGORIES, PUBLIC_BASE_URL
+from app.config import CATEGORIES, public_url
 from app.db import db
 from app.security import hash_password
 from app.serializers import utcnow
@@ -28,7 +28,7 @@ PASSWORD = "senha1234"
 
 def photos(slug: str) -> list[str]:
     return [
-        f"{PUBLIC_BASE_URL}/static/demo/{slug}-{i}.svg" for i in range(1, 4)
+        public_url(f"/static/demo/{slug}-{i}.svg") for i in range(1, 4)
     ]
 
 

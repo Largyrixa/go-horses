@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help db install generate push seed setup api web reset
+.PHONY: help db install generate push seed setup api web build reset
 
 help:
 	@echo "make db        - sobe o Postgres local (docker compose)"
@@ -10,7 +10,8 @@ help:
 	@echo "make seed      - popula os dados de demonstração"
 	@echo "make setup     - install + generate + push + seed"
 	@echo "make api       - roda a API em http://localhost:8088"
-	@echo "make web       - roda o frontend em http://localhost:8080"
+	@echo "make web       - roda o frontend em http://localhost:8080 (instala deps se preciso)"
+	@echo "make build     - gera o build de produção do frontend em frontend/dist"
 	@echo "make reset     - apaga e recria os dados de demonstração"
 
 db:
@@ -35,6 +36,11 @@ api:
 	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8088
 
 web:
+	cd frontend && { [ -d node_modules ] || npm ci; }
 	cd frontend && npm run dev
+
+build:
+	cd frontend && { [ -d node_modules ] || npm ci; }
+	cd frontend && npm run build
 
 reset: seed

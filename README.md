@@ -91,13 +91,22 @@ Em outro terminal:
 
 ```bash
 cd frontend
-cp env.example .env.local
+cp env.example .env.local   # opcional: os padrões já funcionam
 npm install
 npm run dev
 ```
 
-Abra <http://localhost:8080>. O Vite faz proxy de `/api` (REST + WebSocket)
-para `http://127.0.0.1:8088`, então não há CORS no caminho de desenvolvimento.
+Abra <http://localhost:8080>. O Vite repassa **os mesmos caminhos do Caddy**
+para `http://127.0.0.1:8088`: `/api` (REST + WebSocket), `/uploads` (fotos
+enviadas) e `/static` (imagens do seed). O front só usa URLs relativas, então
+não há CORS nem host/porta fixos no bundle — o mesmo código roda em dev e em
+produção.
+
+Para ver o build de produção localmente (com o mesmo proxy, na porta 4173):
+
+```bash
+npm run build && npm run preview
+```
 
 ### 1.4 Contas de demonstração
 
@@ -286,7 +295,7 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
 | `DATABASE_URL` | `postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public` | conexão do Prisma |
 | `SECRET_KEY` | — | assina URLs de upload; troque em produção |
 | `CORS_ORIGINS` | `http://localhost:8080,...` | origens liberadas (separadas por vírgula) |
-| `PUBLIC_BASE_URL` | `http://localhost:8088` | base das URLs públicas de fotos |
+| `PUBLIC_BASE_URL` | vazio | base opcional das URLs de fotos; vazio = caminhos relativos |
 | `UPLOAD_DIR` | `./uploads` | pasta dos arquivos enviados |
 | `UPLOAD_MAX_BYTES` | `5242880` | tamanho máximo por foto (5 MB) |
 | `SESSION_TTL_DAYS` | `7` | validade da sessão |
@@ -303,12 +312,14 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
 | `VITE_MIN_PHOTOS` / `VITE_MAX_PHOTOS` | `3` / `10` | limites no formulário |
 | `VITE_MAX_PHOTO_MB` | `5` | tamanho máximo no formulário |
 
-**Correção feita no `env.example`:** o arquivo antigo apontava
-`VITE_PROXY_TARGET=http://localhost:8080`, mas **8080 é a porta interna do front
-na VM**, não a da API. O backend roda em **8088**, então o proxy foi corrigido.
-`VITE_API_URL` vazio é intencional: em dev o Vite faz proxy; em produção o Caddy
-faz o mesmo, o que evita CORS e URL fixa no bundle. Deixe vazio também no build
-da VM.
+**Por que `PUBLIC_BASE_URL` fica vazio:** as fotos são servidas pelo próprio
+sistema, então a API devolve caminhos relativos (`/uploads/...`, `/static/...`).
+Quem resolve a origem é o navegador: o proxy do Vite em dev e o Caddy em
+produção. Assim o mesmo banco e o mesmo build funcionam nos dois ambientes, sem
+CORS, sem URL fixa no bundle e sem re-rodar o seed ao trocar de host/porta.
+Se o banco já tiver URLs absolutas antigas (ex.: `http://localhost:8088/...`),
+o serializer reduz para o caminho automaticamente. Preencha só se as fotos
+forem para outra origem (S3/R2).
 
 ---
 
@@ -339,7 +350,7 @@ cd /opt/gohorses/backend
 cp .env.example .env
 nano .env
 # DATABASE_URL="postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public"
-# PUBLIC_BASE_URL="http://200.18.99.113:8028"
+# PUBLIC_BASE_URL=   # deixe vazio: as fotos usam URLs relativas atrás do Caddy
 # CORS_ORIGINS="http://200.18.99.113:8028"
 # SECRET_KEY="<uma string longa aleatória>"
 
@@ -385,8 +396,10 @@ sudo systemctl reload caddy
 Abra <http://200.18.99.113:8028>. O `Caddy` escuta **8080** na VM; a
 organização encaminha a **8028** pública para ela.
 
-> **Fotos:** `PUBLIC_BASE_URL` precisa ser a URL pública para os links das fotos
-> funcionarem. Se mudar esse valor depois do seed, rode `python seed.py` de novo.
+> **Fotos:** com `PUBLIC_BASE_URL` vazio a API devolve `/uploads/...` e
+> `/static/...`, e o Caddy já encaminha os dois para o backend. Não precisa
+> re-rodar o seed ao publicar na VM; só preencha `PUBLIC_BASE_URL` se as fotos
+> saírem para outro storage (S3/R2).
 >
 > **WebSocket:** o `reverse_proxy` do Caddy já trata `Upgrade`/`Connection`
 > automaticamente; não precisa de configuração extra para a sala.
@@ -457,8 +470,9 @@ go-horses/
 | `DATABASE_URL não configurada` | Falta `backend/.env`; copie do `.env.example` |
 | Front chama API e dá erro de rede | Backend está em `:8088`? O proxy do Vite aponta para lá |
 | Erro de CORS no navegador | Em dev use o proxy; se chamar a API direto, inclua a origem em `CORS_ORIGINS` |
-| Fotos não aparecem | `PUBLIC_BASE_URL` errado ou Caddy sem proxy para `/uploads/` e `/static/` |
+| Fotos não aparecem | Em dev, veja se a API está em `:8088` (o proxy cobre `/uploads` e `/static`); em produção, se o Caddy está com os proxies e o `chmod a+rX` no `dist` |
+| `npm run dev` diz que a 8080 está em uso | O Caddy (ou outro Vite) está escutando; pare um deles. O `npm run preview` usa a 4173 justamente para não brigar |
 | Sala não atualiza | WebSocket bloqueado: veja `journalctl -u caddy -f`; o Caddy já faz o upgrade sozinho |
 | `401` e volta ao login | Sessão expirou (7 dias) ou usuário fez logout em outra aba |
 | Reiniciei e o leilão fechou | Correto: RF18 manda abrir/fechar o que passou do horário |
-| Seed sem fotos | As imagens são locais; o `PUBLIC_BASE_URL` precisa apontar para o backend/Caddy |
+| Seed sem fotos | As imagens são locais (`backend/static/demo/`); confira se o Caddy/Vite repassa `/static` |

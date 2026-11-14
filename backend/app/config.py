@@ -23,7 +23,18 @@ CORS_ORIGINS = [
     if origin.strip()
 ]
 
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8088").rstrip("/")
+# Base das URLs públicas de fotos. Vazio (recomendado) = URLs relativas
+# ("/uploads/...", "/static/..."), que funcionam tanto no `npm run dev` (proxy
+# do Vite) quanto em produção atrás do Caddy, sem depender de host/porta.
+# Só preencha se as fotos forem servidas por OUTRA origem (ex.: S3/R2).
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+
+
+def public_url(path: str) -> str:
+    """Monta a URL pública de um asset; sem PUBLIC_BASE_URL, devolve o caminho."""
+    return f"{PUBLIC_BASE_URL}{path}" if PUBLIC_BASE_URL else path
+
+
 _upload_dir = Path(os.getenv("UPLOAD_DIR", "uploads"))
 if not _upload_dir.is_absolute():
     _upload_dir = BASE_DIR / _upload_dir
