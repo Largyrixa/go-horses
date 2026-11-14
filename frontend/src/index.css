@@ -1,0 +1,38 @@
+@font-face { font-family: "Glacial Indifference"; src: url("./assets/fonts/GlacialIndifference-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Glacial Indifference"; src: url("./assets/fonts/GlacialIndifference-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base { body { @apply font-sans; } }
+
+html { scroll-padding-top: 85px; scroll-behavior: smooth; }
+body { background-color: #0B0B0F; color: #F2F0E8; }
+
+/* Visual herdado do secomp-web-xiv: scanlines CRT sutis e scrollbar de terminal */
+.crt-overlay {
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none; mix-blend-mode: overlay; opacity: 0.35;
+  background-image: repeating-linear-gradient(to bottom, rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 1px, transparent 1px, transparent 3px);
+}
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #0B0B0F; }
+::-webkit-scrollbar-thumb { background: #00FF66; border-radius: 999px; border: 2px solid #0B0B0F; }
+html { scrollbar-width: thin; scrollbar-color: #00FF66 #0B0B0F; }
+
+:focus-visible { outline: 2px solid #00FF66; outline-offset: 2px; }
+
+@layer components {
+  .field {
+    @apply w-full rounded-md border border-edge bg-surface px-4 py-3 text-textColor placeholder:text-gray focus:border-primary focus:outline-none;
+  }
+  .panel { @apply rounded-lg border border-edge bg-surface p-5; }
+}
+
+.glitch-hover { display: inline-block; }
+.glitch-hover:hover { text-shadow: 2px 0 #1400FF, -2px 0 #00FF66; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .glitch-hover:hover { text-shadow: none; }
+}
