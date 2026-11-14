@@ -1,2 +1,8 @@
 fastapi
 uvicorn[standard]
+psycopg[binary,pool]
+python-multipart
+pyjwt
+bcrypt
+boto3
+pydantic-settings
