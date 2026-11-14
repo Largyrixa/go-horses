@@ -1,8 +1,12 @@
 fastapi
 uvicorn[standard]
-psycopg[binary,pool]
+aiomysql
+cryptography
 python-multipart
 pyjwt
-bcrypt
+passlib[bcrypt]
+bcrypt<4.1
 boto3
 pydantic-settings
+pydantic[email]
+email-validator
