@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, Trash2 } from "lucide-react";
-import { api, uploadPhoto } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import Button from "@/components/Button";
 import { ErrorNote, Field, PageTitle } from "@/components/ui";
 import { DEFAULT_CATEGORIES, parseCents, toLocalInput } from "@/utils/format";
-
-const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
-const MIN_PHOTOS = Number(import.meta.env.VITE_MIN_PHOTOS || 3);
-const MAX_PHOTOS = Number(import.meta.env.VITE_MAX_PHOTOS || 10);
-const MAX_MB = Number(import.meta.env.VITE_MAX_PHOTO_MB || 5);
+import { ALLOWED_TYPES, MAX_MB, MAX_PHOTOS, MIN_PHOTOS, pickPhotos, uploadPhotos } from "@/utils/photos";
 
 // RF05–RF07: item + leilão numa tela só; fotos vão direto para a nuvem.
 export default function NovoLeilao() {
@@ -31,14 +27,9 @@ export default function NovoLeilao() {
   }, []);
 
   function addFiles(list) {
-    const ok = [], errs = [];
-    for (const file of Array.from(list)) {
-      if (!ALLOWED.includes(file.type)) errs.push(`${file.name}: use JPG, PNG ou WebP.`);
-      else if (file.size > MAX_MB * 1048576) errs.push(`${file.name}: passa de ${MAX_MB} MB.`);
-      else ok.push({ file, url: URL.createObjectURL(file) });
-    }
-    setPhotos((p) => [...p, ...ok].slice(0, MAX_PHOTOS));
-    setPhotoErr(errs.join(" "));
+    const { accepted, errors } = pickPhotos(list, Math.max(0, MAX_PHOTOS - photos.length));
+    setPhotos((p) => [...p, ...accepted].slice(0, MAX_PHOTOS));
+    setPhotoErr(errors.join(" "));
   }
   const removePhoto = (i) => setPhotos((p) => { URL.revokeObjectURL(p[i].url); return p.filter((_, j) => j !== i); });
 
@@ -55,13 +46,8 @@ export default function NovoLeilao() {
 
     setBusy(true);
     try {
-      let done = 0;
       setProgress(`Enviando fotos (0 de ${photos.length})…`);
-      const urls = await Promise.all(photos.map(async (p) => {
-        const u = await uploadPhoto(p.file);
-        setProgress(`Enviando fotos (${++done} de ${photos.length})…`);
-        return u;
-      }));
+      const urls = await uploadPhotos(photos, (done, total) => setProgress(`Enviando fotos (${done} de ${total})…`));
       setProgress("Criando o leilão…");
       const a = await api.createAuction({
         name: f.name.trim(), description: f.description.trim(), category: f.category, photos: urls,
@@ -94,8 +80,8 @@ export default function NovoLeilao() {
         <div className="grid gap-5 md:grid-cols-3">
           <Field label="Preço inicial (R$)" hint="Use vírgula para os centavos."><input className="field" inputMode="decimal" required placeholder="150,00" value={f.price} onChange={set("price")} /></Field>
           <Field label="Início" hint={`Seu fuso: ${tz}`}><input className="field" type="datetime-local" required value={f.start} onChange={set("start")} /></Field>
-          <Field label="Duração (minutos)" hint="Para a demo, use 3.">
-            <input className="field" type="number" min="1" step="1" required value={f.minutes} onChange={set("minutes")} />
+          <Field label="Duração (minutos)" hint="Mínimo de 1 minuto; máximo de 7 dias.">
+            <input className="field" type="number" min="1" max="10080" step="1" required value={f.minutes} onChange={set("minutes")} />
           </Field>
         </div>
         <div className="-mt-3 flex flex-wrap gap-2" aria-label="Atalhos de horário">
@@ -117,7 +103,7 @@ export default function NovoLeilao() {
             {photos.length < MAX_PHOTOS && (
               <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded border border-dashed border-primary/60 text-sm text-primary hover:bg-primary/10 focus-within:outline focus-within:outline-2 focus-within:outline-primary">
                 <ImagePlus aria-hidden="true" /> Adicionar
-                <input type="file" accept={ALLOWED.join(",")} multiple className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                <input type="file" accept={ALLOWED_TYPES.join(",")} multiple className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
               </label>
             )}
           </div>

@@ -36,6 +36,12 @@ def iso(value: datetime | None) -> str | None:
     return ensure_utc(value).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def format_brl(cents: int) -> str:
+    """Formata centavos como moeda brasileira: 30500 -> 'R$ 305,00'."""
+    reais = f"{cents / 100:,.2f}".translate(str.maketrans({",": "X", ".": ","}))
+    return "R$ " + reais.replace("X", ".")
+
+
 def bid_increment_cents(price_cents: int) -> int:
     for ceiling, increment in _BID_INCREMENTS:
         if ceiling is None or price_cents <= ceiling:

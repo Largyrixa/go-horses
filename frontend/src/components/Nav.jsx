@@ -10,12 +10,14 @@ export default function Nav() {
   const links = user
     ? [
         { name: "Leilões", href: "/" },
+        { name: "Comitentes", href: "/comitentes" },
         { name: "Anunciar", href: "/leiloes/novo" },
         { name: "Meus leilões", href: "/meus-leiloes" },
         { name: "Participações", href: "/minhas-participacoes" },
       ]
     : [
         { name: "Leilões", href: "/" },
+        { name: "Comitentes", href: "/comitentes" },
         { name: "Entrar", href: "/login" },
         { name: "Cadastrar", href: "/cadastro" },
       ];

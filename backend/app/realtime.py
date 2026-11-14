@@ -46,6 +46,15 @@ class RoomManager:
         spectators = sum(1 for client in room if client.role == "spectator")
         return {"participants": participants, "spectators": spectators}
 
+    def has_participant(self, auction_id: str, user_id: str) -> bool:
+        """RF10/RF25: o usuário está na sala como PARTICIPANTE (pode dar lance)?"""
+        # Sem `await` no meio, nenhuma outra corrotina altera o set durante a
+        # iteração (event loop single-thread), então não precisa do lock.
+        return any(
+            client.user_id == user_id and client.role == "participant"
+            for client in self._rooms.get(auction_id, set())
+        )
+
     async def broadcast(self, auction_id: str, payload: dict) -> None:
         room = list(self._rooms.get(auction_id, set()))
         if not room:

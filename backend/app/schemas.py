@@ -33,6 +33,13 @@ class BidIn(BaseModel):
     amount: int = Field(gt=0, description="Centavos inteiros")
 
 
+class AuctionUpdateIn(BaseModel):
+    """RF23: só duração (antes do início) e fotos novas (sempre anexadas)."""
+
+    duration_seconds: int | None = Field(default=None, ge=60, le=7 * 24 * 60 * 60)
+    photos: list[str] | None = Field(default=None, min_length=1, max_length=10)
+
+
 class PresignIn(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=100)

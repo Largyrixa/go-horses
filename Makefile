@@ -3,7 +3,7 @@ SHELL := /bin/bash
 .PHONY: help db install generate push seed setup api web build reset
 
 help:
-	@echo "make db        - sobe o Postgres local (docker compose)"
+	@echo "make db        - garante um Postgres em 127.0.0.1:5432 (reaproveita se já houver)"
 	@echo "make install   - cria .venv e instala as dependências do backend"
 	@echo "make generate  - gera o client do Prisma"
 	@echo "make push      - cria/atualiza as tabelas no Postgres"
@@ -15,7 +15,18 @@ help:
 	@echo "make reset     - apaga e recria os dados de demonstração"
 
 db:
-	docker compose up -d db
+	@if (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null; then \
+		echo "Postgres já responde em 127.0.0.1:5432 — usando o banco existente (Docker não é necessário)."; \
+	else \
+		docker compose up -d db || { \
+			echo ""; \
+			echo "Não foi possível subir o Postgres via Docker."; \
+			echo "Se o erro foi 'permission denied' em /var/run/docker.sock:"; \
+			echo "  newgrp docker      # ou faça logout/login e tente de novo"; \
+			echo "  # alternativa: sudo docker compose up -d db"; \
+			exit 1; \
+		}; \
+	fi
 
 install:
 	cd backend && python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -r requirements.txt
