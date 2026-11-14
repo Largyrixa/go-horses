@@ -1,0 +1,29 @@
+# Caddy da VM (Go Horses) — front na 8080, API interna na 8000.
+#
+# A VM expõe a porta 8028 para o navegador (200.18.99.113:8028) e o
+# port-forward da organização leva para a 8080 dentro da VM.
+#
+# Instalação:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# O reverse_proxy do Caddy cuida do Upgrade/Connection do WebSocket sozinho.
+# O backend valida o tamanho das fotos (5 MB); não é preciso limite extra aqui.
+
+:8080 {
+	encode gzip zstd
+
+	# REST + WebSocket + fotos + imagens de demonstração.
+	@backend path /api/* /uploads/* /static/* /health
+	handle @backend {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# SPA (React Router): qualquer rota desconhecida cai no index.html.
+	handle {
+		root * /var/www/gohorses/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
