@@ -1,128 +1,156 @@
-CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE DATABASE IF NOT EXISTS leilao
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
+USE leilao;
 
--- Usuários
+-- Usuários (utf8mb4_0900_ai_ci já ignora maiúsculas e acentos em buscas e e-mail)
 CREATE TABLE IF NOT EXISTS users (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    display_name         TEXT   NOT NULL CHECK (btrim(display_name) <> ''),
-    email                CITEXT NOT NULL UNIQUE,
-    password_hash        TEXT   NOT NULL,
-    monthly_income_cents BIGINT CHECK (monthly_income_cents >= 0),
-    seller_enabled_at    TIMESTAMPTZ,
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_users_name_trgm ON users USING gin (display_name gin_trgm_ops);
+    id                   CHAR(36) PRIMARY KEY,
+    display_name         VARCHAR(150) NOT NULL,
+    email                VARCHAR(255) NOT NULL UNIQUE,
+    password_hash        VARCHAR(255) NOT NULL,
+    monthly_income_cents BIGINT NULL,
+    seller_enabled_at    DATETIME(6) NULL,
+    created_at           DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT ck_users_name   CHECK (TRIM(display_name) <> ''),
+    CONSTRAINT ck_users_income CHECK (monthly_income_cents IS NULL OR monthly_income_cents >= 0)
+) ENGINE=InnoDB;
 
 -- Sessões
 CREATE TABLE IF NOT EXISTS sessions (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id),
-    token_hash  TEXT NOT NULL UNIQUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at  TIMESTAMPTZ NOT NULL,
-    revoked_at  TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+    id          CHAR(36) PRIMARY KEY,
+    user_id     CHAR(36) NOT NULL,
+    token_hash  CHAR(64) NOT NULL UNIQUE,
+    created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    expires_at  DATETIME(6) NOT NULL,
+    revoked_at  DATETIME(6) NULL,
+    INDEX idx_sessions_user (user_id),
+    CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
 
 -- Itens
 CREATE TABLE IF NOT EXISTS items (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    owner_id    UUID NOT NULL REFERENCES users(id),
-    title       TEXT NOT NULL CHECK (btrim(title) <> ''),
-    description TEXT NOT NULL CHECK (btrim(description) <> ''),
-    category    TEXT NOT NULL CHECK (btrim(category) <> ''),
-    photos      JSONB NOT NULL
-                CHECK (jsonb_typeof(photos) = 'array' AND jsonb_array_length(photos) >= 3),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_items_owner      ON items (owner_id);
-CREATE INDEX IF NOT EXISTS idx_items_category   ON items (category);
-CREATE INDEX IF NOT EXISTS idx_items_title_trgm ON items USING gin (title gin_trgm_ops);
+    id          CHAR(36) PRIMARY KEY,
+    owner_id    CHAR(36) NOT NULL,
+    title       VARCHAR(150) NOT NULL,
+    description TEXT NOT NULL,
+    category    VARCHAR(80) NOT NULL,
+    photos      JSON NOT NULL,
+    created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_items_owner    (owner_id),
+    INDEX idx_items_category (category),
+    CONSTRAINT fk_items_owner FOREIGN KEY (owner_id) REFERENCES users(id),
+    CONSTRAINT ck_items_title CHECK (TRIM(title) <> ''),
+    CONSTRAINT ck_items_desc  CHECK (TRIM(description) <> ''),
+    CONSTRAINT ck_items_cat   CHECK (TRIM(category) <> ''),
+    CONSTRAINT ck_items_photos CHECK (JSON_TYPE(photos) = 'ARRAY' AND JSON_LENGTH(photos) >= 3)
+) ENGINE=InnoDB;
 
 -- Leilões
 CREATE TABLE IF NOT EXISTS auctions (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    item_id           UUID NOT NULL REFERENCES items(id),
-    status            TEXT NOT NULL DEFAULT 'AGENDADO'
-                      CHECK (status IN ('AGENDADO','EM_ANDAMENTO','VENDIDO','ENCERRADO_SEM_LANCES','CANCELADO')),
-    start_price       BIGINT NOT NULL CHECK (start_price > 0),
+    id                CHAR(36) PRIMARY KEY,
+    item_id           CHAR(36) NOT NULL,
+    status            VARCHAR(30) NOT NULL DEFAULT 'AGENDADO',
+    start_price       BIGINT NOT NULL,
     current_price     BIGINT NOT NULL,
     current_min_bid   BIGINT NOT NULL,
-    leader_id         UUID REFERENCES users(id),
-    bid_count         INT NOT NULL DEFAULT 0 CHECK (bid_count >= 0),
-    starts_at         TIMESTAMPTZ NOT NULL,
-    ends_at           TIMESTAMPTZ NOT NULL,
-    original_ends_at  TIMESTAMPTZ NOT NULL,
-    closed_at         TIMESTAMPTZ,
-    cancelled_at      TIMESTAMPTZ,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    leader_id         CHAR(36) NULL,
+    bid_count         INT NOT NULL DEFAULT 0,
+    starts_at         DATETIME(6) NOT NULL,
+    ends_at           DATETIME(6) NOT NULL,
+    original_ends_at  DATETIME(6) NOT NULL,
+    closed_at         DATETIME(6) NULL,
+    cancelled_at      DATETIME(6) NULL,
+    created_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
-    CONSTRAINT ck_auction_times  CHECK (starts_at < original_ends_at AND ends_at >= original_ends_at),
-    CONSTRAINT ck_auction_prices CHECK (
+    -- RF28: garante no banco apenas 1 leilão AGENDADO ou EM_ANDAMENTO por item
+    active_item_id    CHAR(36) GENERATED ALWAYS AS (
+        IF(status IN ('AGENDADO', 'EM_ANDAMENTO'), item_id, NULL)
+    ) VIRTUAL,
+
+    UNIQUE KEY uq_auctions_one_active_per_item (active_item_id),
+    INDEX idx_auctions_status_times (status, starts_at, ends_at),
+    INDEX idx_auctions_item         (item_id),
+    INDEX idx_auctions_leader_status (leader_id, status),
+
+    CONSTRAINT fk_auctions_item   FOREIGN KEY (item_id) REFERENCES items(id),
+    CONSTRAINT fk_auctions_leader FOREIGN KEY (leader_id) REFERENCES users(id),
+    CONSTRAINT ck_auction_status  CHECK (status IN ('AGENDADO','EM_ANDAMENTO','VENDIDO','ENCERRADO_SEM_LANCES','CANCELADO')),
+    CONSTRAINT ck_auction_start   CHECK (start_price > 0),
+    CONSTRAINT ck_auction_bids    CHECK (bid_count >= 0),
+    CONSTRAINT ck_auction_times   CHECK (starts_at < original_ends_at AND ends_at >= original_ends_at),
+    CONSTRAINT ck_auction_prices  CHECK (
         (bid_count = 0 AND current_price = start_price AND current_min_bid = start_price)
         OR (bid_count > 0 AND current_price >= start_price AND current_min_bid > current_price)
     ),
-    CONSTRAINT ck_auction_leader CHECK ((bid_count = 0) = (leader_id IS NULL)),
-    CONSTRAINT ck_auction_final  CHECK (
+    CONSTRAINT ck_auction_leader  CHECK ((bid_count = 0) = (leader_id IS NULL)),
+    CONSTRAINT ck_auction_final   CHECK (
         status IN ('AGENDADO','EM_ANDAMENTO')
         OR (status = 'VENDIDO' AND bid_count > 0)
         OR (status IN ('ENCERRADO_SEM_LANCES','CANCELADO') AND bid_count = 0)
     )
-);
+) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_auctions_one_active_per_item
-    ON auctions (item_id) WHERE status IN ('AGENDADO','EM_ANDAMENTO');
-
-CREATE INDEX IF NOT EXISTS idx_auctions_status_times ON auctions (status, starts_at, ends_at);
-CREATE INDEX IF NOT EXISTS idx_auctions_to_open      ON auctions (starts_at) WHERE status = 'AGENDADO';
-CREATE INDEX IF NOT EXISTS idx_auctions_to_close     ON auctions (ends_at)   WHERE status = 'EM_ANDAMENTO';
-CREATE INDEX IF NOT EXISTS idx_auctions_item         ON auctions (item_id);
-CREATE INDEX IF NOT EXISTS idx_auctions_leader       ON auctions (leader_id) WHERE status = 'EM_ANDAMENTO';
-CREATE INDEX IF NOT EXISTS idx_auctions_winner       ON auctions (leader_id) WHERE status = 'VENDIDO';
-
-CREATE OR REPLACE FUNCTION auctions_guard_status() RETURNS trigger AS $$
-BEGIN
-    IF OLD.status IN ('VENDIDO','ENCERRADO_SEM_LANCES','CANCELADO') THEN
-        RAISE EXCEPTION 'Leilão % está em estado final (%) e é imutável', OLD.id, OLD.status;
-    END IF;
-    IF NEW.status <> OLD.status AND NOT (
-           (OLD.status = 'AGENDADO'     AND NEW.status IN ('EM_ANDAMENTO','CANCELADO'))
-        OR (OLD.status = 'EM_ANDAMENTO' AND NEW.status IN ('VENDIDO','ENCERRADO_SEM_LANCES','CANCELADO'))
-    ) THEN
-        RAISE EXCEPTION 'Transição inválida: % -> %', OLD.status, NEW.status;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_auctions_guard_status ON auctions;
+DELIMITER $$
 CREATE TRIGGER trg_auctions_guard_status
-    BEFORE UPDATE ON auctions
-    FOR EACH ROW EXECUTE FUNCTION auctions_guard_status();
+BEFORE UPDATE ON auctions
+FOR EACH ROW
+BEGIN
+    IF OLD.status IN ('VENDIDO', 'ENCERRADO_SEM_LANCES', 'CANCELADO') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Leilão em estado final é imutável';
+    END IF;
+
+    IF NEW.status <> OLD.status AND NOT (
+           (OLD.status = 'AGENDADO'     AND NEW.status IN ('EM_ANDAMENTO', 'CANCELADO'))
+        OR (OLD.status = 'EM_ANDAMENTO' AND NEW.status IN ('VENDIDO', 'ENCERRADO_SEM_LANCES', 'CANCELADO'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Transição de estado inválida para o leilão';
+    END IF;
+END$$
+DELIMITER ;
 
 -- Lances
 CREATE TABLE IF NOT EXISTS bids (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    auction_id       UUID NOT NULL REFERENCES auctions(id),
-    user_id          UUID NOT NULL REFERENCES users(id),
-    amount           BIGINT NOT NULL CHECK (amount > 0),
+    id               CHAR(36) PRIMARY KEY,
+    auction_id       CHAR(36) NOT NULL,
+    user_id          CHAR(36) NOT NULL,
+    amount           BIGINT NOT NULL,
     seq              INT NOT NULL,
-    idempotency_key  UUID NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (auction_id, user_id, idempotency_key),
-    UNIQUE (auction_id, seq),
-    UNIQUE (auction_id, amount)
-);
-CREATE INDEX IF NOT EXISTS idx_bids_auction_created ON bids (auction_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_bids_user_created    ON bids (user_id, created_at DESC);
+    idempotency_key  CHAR(36) NOT NULL,
+    created_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
+    UNIQUE KEY uq_bids_idempotency (auction_id, user_id, idempotency_key),
+    UNIQUE KEY uq_bids_seq         (auction_id, seq),
+    UNIQUE KEY uq_bids_amount      (auction_id, amount),
+    INDEX idx_bids_auction_created (auction_id, created_at DESC),
+    INDEX idx_bids_user_created    (user_id, created_at DESC),
+
+    CONSTRAINT fk_bids_auction FOREIGN KEY (auction_id) REFERENCES auctions(id),
+    CONSTRAINT fk_bids_user    FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT ck_bids_amount  CHECK (amount > 0)
+) ENGINE=InnoDB;
 
 -- Presença na sala
 CREATE TABLE IF NOT EXISTS auction_presence (
-    auction_id    UUID NOT NULL REFERENCES auctions(id),
-    user_id       UUID NOT NULL REFERENCES users(id),
-    role          TEXT NOT NULL CHECK (role IN ('PARTICIPANTE','ESPECTADOR')),
-    joined_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (auction_id, user_id)
-);
+    auction_id    CHAR(36) NOT NULL,
+    user_id       CHAR(36) NOT NULL,
+    role          VARCHAR(20) NOT NULL,
+    joined_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    last_seen_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (auction_id, user_id),
+    CONSTRAINT fk_presence_auction FOREIGN KEY (auction_id) REFERENCES auctions(id),
+    CONSTRAINT fk_presence_user    FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT ck_presence_role    CHECK (role IN ('PARTICIPANTE', 'ESPECTADOR'))
+) ENGINE=InnoDB;
+
+-- Barramento de eventos em tempo real (substitui LISTEN/NOTIFY para multi-instância)
+CREATE TABLE IF NOT EXISTS auction_events (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    auction_id     CHAR(36) NOT NULL,
+    target_user_id CHAR(36) NULL,
+    payload        JSON NOT NULL,
+    created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_events_created (created_at)
+) ENGINE=InnoDB;
