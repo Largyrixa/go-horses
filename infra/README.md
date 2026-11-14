@@ -56,7 +56,7 @@ O script usa a branch `main` por padrão; para deployar outra branch: `BRANCH=in
 ## Recriar o ambiente do zero (RNF03)
 
 ```bash
-cp .env.example .env     # preencher DB_PASSWORD, DB_ROOT_PASSWORD e credenciais do armazenamento
+cp .env.example .env     # preencher DB_PASSWORD e as credenciais do armazenamento
 docker compose up -d --build
 ```
 
