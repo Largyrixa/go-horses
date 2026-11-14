@@ -18,12 +18,12 @@ ENFORCE_CREDIT = os.getenv("ENFORCE_CREDIT", "false").strip().lower() in {"1", "
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
-        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+        "CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080"
     ).split(",")
     if origin.strip()
 ]
 
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8088").rstrip("/")
 _upload_dir = Path(os.getenv("UPLOAD_DIR", "uploads"))
 if not _upload_dir.is_absolute():
     _upload_dir = BASE_DIR / _upload_dir

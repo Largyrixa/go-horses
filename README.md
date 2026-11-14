@@ -7,9 +7,12 @@ O **frontend** já estava prototipado; este repositório agora tem também o
 
 - **Produção prevista na VM:** <http://200.18.99.113:8028>
   (a porta pública 8028 é encaminhada para a **8080** dentro da VM; ver [Deploy](#deploy-na-vm))
-- **API local:** <http://localhost:8000>
-- **Documentação interativa (Swagger):** <http://localhost:8000/docs>
-- **Frontend local:** <http://localhost:5173>
+- **API local:** <http://localhost:8088>
+- **Documentação interativa (Swagger):** <http://localhost:8088/docs>
+- **Frontend local:** <http://localhost:8080>
+
+> **Portas:** frontend **8080**, backend **8088** e PostgreSQL **5432**.
+> O 3306 é a porta padrão do MySQL; como o banco aqui é PostgreSQL, usamos 5432.
 
 ```
 navegador
@@ -18,11 +21,11 @@ navegador
 ┌───────────────────────────── VM ─────────────────────────────┐
 │ Caddy :8080                                                  │
 │   ├── /            → frontend React (dist)                   │
-│   ├── /api/        → uvicorn 127.0.0.1:8000 (REST + WS)      │
+│   ├── /api/        → uvicorn 127.0.0.1:8088 (REST + WS)      │
 │   ├── /uploads/    → fotos enviadas                          │
 │   └── /static/     → imagens de demonstração                 │
 │                                                              │
-│ uvicorn :8000 (FastAPI) ── Prisma ── PostgreSQL :5432        │
+│ uvicorn :8088 (FastAPI) ── Prisma ── PostgreSQL :5432        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -65,7 +68,7 @@ prisma generate               # gera o client Python a partir do schema
 prisma db push                # cria as tabelas no Postgres
 python seed.py                # popula contas e leilões de demonstração
 
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8088
 ```
 
 Se `prisma` não for encontrado mesmo com a venv ativa:
@@ -79,7 +82,7 @@ Atalho com Make (na raiz, depois de subir o banco):
 
 ```bash
 make setup   # instala, gera o client, cria as tabelas e roda o seed
-make api     # sobe a API em :8000
+make api     # sobe a API em :8088
 ```
 
 ### 1.3 Frontend
@@ -93,8 +96,8 @@ npm install
 npm run dev
 ```
 
-Abra <http://localhost:5173>. O Vite faz proxy de `/api` (REST + WebSocket)
-para `http://127.0.0.1:8000`, então não há CORS no caminho de desenvolvimento.
+Abra <http://localhost:8080>. O Vite faz proxy de `/api` (REST + WebSocket)
+para `http://127.0.0.1:8088`, então não há CORS no caminho de desenvolvimento.
 
 ### 1.4 Contas de demonstração
 
@@ -126,7 +129,7 @@ make reset
 
 ## 2. Como testar
 
-1. Abra <http://localhost:8000/docs> e teste as rotas direto no Swagger.
+1. Abra <http://localhost:8088/docs> e teste as rotas direto no Swagger.
 2. No front, entre como `ana@go-horses.dev` e anuncie um item com **3 fotos**,
    início em **1 minuto** e duração de **3 minutos** (atalhos da tela).
 3. Entre como `bruno@go-horses.dev` e dê lances na sala. Abra outra janela
@@ -139,13 +142,13 @@ make reset
 Exemplo de lance via `curl` (o `Idempotency-Key` é obrigatório — RF12):
 
 ```bash
-TOKEN=$(curl -s http://localhost:8000/api/auth/login \
+TOKEN=$(curl -s http://localhost:8088/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"bruno@go-horses.dev","password":"senha1234"}' | jq -r .token)
 
-AUCTION=$(curl -s 'http://localhost:8000/api/auctions?status=running' | jq -r '.items[0].id')
+AUCTION=$(curl -s 'http://localhost:8088/api/auctions?status=running' | jq -r '.items[0].id')
 
-curl -s -X POST "http://localhost:8000/api/auctions/$AUCTION/bids" \
+curl -s -X POST "http://localhost:8088/api/auctions/$AUCTION/bids" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: tente-1' \
@@ -282,8 +285,8 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
 |---|---|---|
 | `DATABASE_URL` | `postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public` | conexão do Prisma |
 | `SECRET_KEY` | — | assina URLs de upload; troque em produção |
-| `CORS_ORIGINS` | `http://localhost:5173,...` | origens liberadas (separadas por vírgula) |
-| `PUBLIC_BASE_URL` | `http://localhost:8000` | base das URLs públicas de fotos |
+| `CORS_ORIGINS` | `http://localhost:8080,...` | origens liberadas (separadas por vírgula) |
+| `PUBLIC_BASE_URL` | `http://localhost:8088` | base das URLs públicas de fotos |
 | `UPLOAD_DIR` | `./uploads` | pasta dos arquivos enviados |
 | `UPLOAD_MAX_BYTES` | `5242880` | tamanho máximo por foto (5 MB) |
 | `SESSION_TTL_DAYS` | `7` | validade da sessão |
@@ -295,14 +298,14 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
 | Variável | Padrão | Para que serve |
 |---|---|---|
 | `VITE_API_URL` | vazio | vazio = `/api` na mesma origem (proxy do Vite/Caddy) |
-| `VITE_PROXY_TARGET` | `http://127.0.0.1:8000` | destino do proxy em dev |
+| `VITE_PROXY_TARGET` | `http://127.0.0.1:8088` | destino do proxy em dev |
 | `VITE_WS_URL` | vazio | vazio = mesma origem da API |
 | `VITE_MIN_PHOTOS` / `VITE_MAX_PHOTOS` | `3` / `10` | limites no formulário |
 | `VITE_MAX_PHOTO_MB` | `5` | tamanho máximo no formulário |
 
 **Correção feita no `env.example`:** o arquivo antigo apontava
 `VITE_PROXY_TARGET=http://localhost:8080`, mas **8080 é a porta interna do front
-na VM**, não a da API. O backend roda em **8000**, então o proxy foi corrigido.
+na VM**, não a da API. O backend roda em **8088**, então o proxy foi corrigido.
 `VITE_API_URL` vazio é intencional: em dev o Vite faz proxy; em produção o Caddy
 faz o mesmo, o que evita CORS e URL fixa no bundle. Deixe vazio também no build
 da VM.
@@ -354,7 +357,7 @@ Instale o serviço:
 sudo cp /opt/gohorses/deploy/gohorses-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gohorses-api
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:8088/api/health
 ```
 
 ### 7.3 Frontend + Caddy
@@ -452,7 +455,7 @@ go-horses/
 | `prisma-client-py: command not found` | Ative a venv ou use `PATH="$PWD/.venv/bin:$PATH" .venv/bin/prisma generate` |
 | `Can't reach database server` | Postgres não subiu ou `DATABASE_URL` errada (`docker compose up -d db`) |
 | `DATABASE_URL não configurada` | Falta `backend/.env`; copie do `.env.example` |
-| Front chama API e dá erro de rede | Backend está em `:8000`? O proxy do Vite aponta para lá |
+| Front chama API e dá erro de rede | Backend está em `:8088`? O proxy do Vite aponta para lá |
 | Erro de CORS no navegador | Em dev use o proxy; se chamar a API direto, inclua a origem em `CORS_ORIGINS` |
 | Fotos não aparecem | `PUBLIC_BASE_URL` errado ou Caddy sem proxy para `/uploads/` e `/static/` |
 | Sala não atualiza | WebSocket bloqueado: veja `journalctl -u caddy -f`; o Caddy já faz o upgrade sozinho |

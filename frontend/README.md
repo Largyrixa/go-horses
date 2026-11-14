@@ -7,12 +7,12 @@ React Router 6 e Tailwind 3.
 ## Rodando
 
 ```sh
-cp env.example .env.local     # opcional; o padrão já funciona com o back-end em :8000
+cp env.example .env.local     # opcional; o padrão já funciona com o back-end em :8088
 npm install
-npm run dev                   # http://localhost:5173
+npm run dev                   # http://localhost:8080
 ```
 
-Em dev, `/api` (REST e WebSocket) passa pelo proxy do Vite para `VITE_PROXY_TARGET` (padrão `http://127.0.0.1:8000`).
+Em dev, `/api` (REST e WebSocket) passa pelo proxy do Vite para `VITE_PROXY_TARGET` (padrão `http://127.0.0.1:8088`).
 Em produção (`npm run build`), sirva `dist/` e faça o proxy reverso de `/api`, `/uploads` e `/static` para o back-end;
 as rotas do front precisam de fallback para `index.html` (Caddy: `try_files {path} /index.html`).
 Deixe `VITE_API_URL` vazio no build da VM: o Caddy entrega front e API na mesma origem.

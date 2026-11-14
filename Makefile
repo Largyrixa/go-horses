@@ -9,8 +9,8 @@ help:
 	@echo "make push      - cria/atualiza as tabelas no Postgres"
 	@echo "make seed      - popula os dados de demonstração"
 	@echo "make setup     - install + generate + push + seed"
-	@echo "make api       - roda a API em http://localhost:8000"
-	@echo "make web       - roda o frontend em http://localhost:5173"
+	@echo "make api       - roda a API em http://localhost:8088"
+	@echo "make web       - roda o frontend em http://localhost:8080"
 	@echo "make reset     - apaga e recria os dados de demonstração"
 
 db:
@@ -32,7 +32,7 @@ seed:
 setup: install generate push seed
 
 api:
-	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
+	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8088
 
 web:
 	cd frontend && npm run dev

@@ -1,8 +1,8 @@
 """Go Horses - API de leilão online (FastAPI + Prisma + PostgreSQL).
 
 Rodar local:
-    uvicorn app.main:app --reload --port 8000
-Documentação interativa: http://localhost:8000/docs
+    uvicorn app.main:app --reload --port 8088
+Documentação interativa: http://localhost:8088/docs
 """
 from __future__ import annotations
 
