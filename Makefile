@@ -1,17 +1,21 @@
 SHELL := /bin/bash
 
-.PHONY: help db install generate push seed setup api web reset
+.PHONY: help db install generate push seed setup api web reset test test-security test-race bench
 
 help:
-	@echo "make db        - sobe o Postgres local (docker compose)"
-	@echo "make install   - cria .venv e instala as dependências do backend"
-	@echo "make generate  - gera o client do Prisma"
-	@echo "make push      - cria/atualiza as tabelas no Postgres"
-	@echo "make seed      - popula os dados de demonstração"
-	@echo "make setup     - install + generate + push + seed"
-	@echo "make api       - roda a API em http://localhost:8088"
-	@echo "make web       - roda o frontend em http://localhost:8080"
-	@echo "make reset     - apaga e recria os dados de demonstração"
+	@echo "make db             - sobe o Postgres local (docker compose)"
+	@echo "make install        - cria .venv e instala as dependências do backend"
+	@echo "make generate       - gera o client do Prisma"
+	@echo "make push           - cria/atualiza as tabelas no Postgres"
+	@echo "make seed           - popula os dados de demonstração"
+	@echo "make setup          - install + generate + push + seed"
+	@echo "make api            - roda a API em http://localhost:8088"
+	@echo "make web            - roda o frontend em http://localhost:8080"
+	@echo "make reset          - apaga e recria os dados de demonstração"
+	@echo "make test           - roda toda a suíte de testes (auth, SQLi, corridas, benchmark)"
+	@echo "make test-security  - auth/autorização + SQL injection"
+	@echo "make test-race      - corridas de lances/cancelamento"
+	@echo "make bench          - benchmark de latência/throughput"
 
 db:
 	docker compose up -d db
@@ -38,3 +42,15 @@ web:
 	cd frontend && npm run dev
 
 reset: seed
+
+test:
+	cd backend && .venv/bin/python tests/run_all.py
+
+test-security:
+	cd backend && .venv/bin/python tests/test_auth.py && .venv/bin/python tests/test_sql_injection.py
+
+test-race:
+	cd backend && .venv/bin/python tests/test_race_auction.py
+
+bench:
+	cd backend && .venv/bin/python tests/benchmark.py
