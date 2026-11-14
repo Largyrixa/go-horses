@@ -28,7 +28,8 @@ cd backend
 
 O `run_all.py` faz um preflight em `/api/health`, executa os testes de
 autenticação, SQL injection e corridas, e depois um benchmark rápido. Retorna
-`0` somente se todos passarem.
+`0` somente se todos passarem. O teste de carga (`load_test.py`) **não** roda
+no `run_all.py`; ele é executado separadamente com `make load` ou diretamente.
 
 ## Executar cada parte
 
@@ -144,6 +145,48 @@ passar com 0 falhas.
 - `--include-login` inclui o `POST /api/auth/login` (scrypt é caro de propósito).
 - Não cria lances nem altera dados por padrão.
 
+### `load_test.py`
+
+Teste de **carga/capacidade** com rampa de usuários simultâneos. Responde
+“quantos usuários o servidor aguenta” comparando cada nível com um SLA de p95 e
+taxa de erro.
+
+- `--mode http|ws|both`:
+  - `http`: cada usuário faz ciclos de listagem + detalhe + sala;
+  - `ws`: cada usuário é uma conexão WebSocket na sala de um leilão;
+  - `both`: executa as duas rampas em sequência.
+- `--users 10,25,50,100`: níveis da rampa.
+- `--http-duration 30`: duração de cada nível HTTP.
+- `--ws-hold 30`: tempo mantendo as conexões WebSocket abertas.
+- `--sla-p95-ms 500`: p95 máximo aceitável.
+- `--max-error-rate 0.01`: taxa de erro máxima (1%).
+- `--keep-going`: continua a rampa depois do primeiro nível que falhar.
+- `--server-pid <pid>`: amostra CPU/RSS do uvicorn via `/proc` (Linux).
+- `--json resultado.json`: salva os resultados.
+
+```bash
+# HTTP: 10, 50 e 100 usuários simultâneos por 30s cada
+.venv/bin/python tests/load_test.py --mode http --users 10,50,100 --http-duration 30
+
+# WebSocket: 50, 100 e 250 conexões simultâneas na mesma sala
+.venv/bin/python tests/load_test.py --mode ws --users 50,100,250 --ws-hold 30
+
+# Ambos, medindo CPU/RSS do processo local
+.venv/bin/python tests/load_test.py --mode both --users 10,50,100 \
+  --server-pid "$(pgrep -f 'uvicorn app.main')"
+```
+
+A capacidade reportada é o **maior nível que passou no SLA**. A rampa para no
+primeiro nível que falha (use `--keep-going` para ver até onde degrada). O
+WebSocket mede handshake, primeira mensagem de estado, mensagens recebidas e
+desconexões; o HTTP mede requisições, ciclos completos, RPS e erros.
+
+> O cliente também pode ser o gargalo (CPU, rede, `ulimit -n`). Para cargas
+> altas, rode o teste de outra máquina e acompanhe CPU/RSS do servidor.
+> `both` executa as rampas em sequência, não misturadas. Para carga mista,
+> rode `--mode http` e `--mode ws` em dois terminais apontando para o mesmo
+> servidor e observe os dois relatórios.
+
 ## Dados de teste e limpeza
 
 Os testes criam contas no formato
@@ -165,11 +208,12 @@ para não ficarem abertos por muito tempo.
 ## Segurança e escopo
 
 - Rode a suíte apenas contra ambiente próprio/de teste. Os payloads de SQL
-  injection e as corridas geram tráfego agressivo.
+  injection, as corridas e o teste de carga geram tráfego agressivo.
 - O teste de corrida **não mascara falhas**: se o invariante for violado, ele
   mostra os status/códigos e termina com código de saída diferente de zero.
-- O benchmark é somente leitura por padrão; para carga de escrita, use os testes
-  de corrida em um banco descartável.
+- O benchmark é somente leitura por padrão; o teste de carga também é
+  predominantemente leitura, mas abre muitas conexões simultâneas.
+- Não rode o `load_test.py` com níveis altos contra produção sem autorização.
 
 ## Estrutura
 
@@ -180,6 +224,7 @@ backend/tests/
 ├── test_sql_injection.py  # injeção SQL
 ├── test_race_auction.py   # concorrência de lances/cancelamento
 ├── benchmark.py           # benchmark HTTP
+├── load_test.py           # teste de carga/capacidade (HTTP + WebSocket)
 ├── run_all.py             # orquestrador da suíte
 └── README.md
 ```

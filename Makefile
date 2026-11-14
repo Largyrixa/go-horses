@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help db install generate push seed setup api web reset test test-security test-race bench
+.PHONY: help db install generate push seed setup api web reset test test-security test-race bench load
 
 help:
 	@echo "make db             - sobe o Postgres local (docker compose)"
@@ -16,6 +16,7 @@ help:
 	@echo "make test-security  - auth/autorização + SQL injection"
 	@echo "make test-race      - corridas de lances/cancelamento"
 	@echo "make bench          - benchmark de latência/throughput"
+	@echo "make load           - teste de carga/capacidade (ARGS=\"--mode both --users 10,50,100\")"
 
 db:
 	docker compose up -d db
@@ -54,3 +55,6 @@ test-race:
 
 bench:
 	cd backend && .venv/bin/python tests/benchmark.py
+
+load:
+	cd backend && .venv/bin/python tests/load_test.py $(ARGS)
