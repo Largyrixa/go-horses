@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gohorses-db
+    environment:
+      POSTGRES_USER: gohorses
+      POSTGRES_PASSWORD: gohorses
+      POSTGRES_DB: gohorses
+    ports:
+      # PostgreSQL na 5432, só em localhost: o banco não deve ficar exposto
+      # na rede/Internet. O 3306 é do MySQL; não usamos aqui.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - gohorses_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gohorses -d gohorses"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gohorses_pgdata:

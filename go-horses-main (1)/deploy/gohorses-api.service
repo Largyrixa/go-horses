@@ -1,0 +1,20 @@
+[Unit]
+Description=Go Horses API (FastAPI + Prisma)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/gohorses/backend
+EnvironmentFile=/opt/gohorses/backend/.env
+# Um worker: as contagens de participantes/espectadores da sala são em memória.
+# Os lances continuam corretos com vários workers por causa do lock no Postgres,
+# mas cada sala contaria apenas os sockets ligados em cada processo.
+ExecStart=/opt/gohorses/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8088 --workers 1
+Restart=always
+RestartSec=2
+# Logs: journalctl -u gohorses-api -f
+
+[Install]
+WantedBy=multi-user.target
