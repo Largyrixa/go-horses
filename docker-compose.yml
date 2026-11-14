@@ -7,8 +7,9 @@ services:
       POSTGRES_PASSWORD: gohorses
       POSTGRES_DB: gohorses
     ports:
-      # PostgreSQL na 5432. O 3306 é do MySQL; não usamos aqui.
-      - "5432:5432"
+      # PostgreSQL na 5432, só em localhost: o banco não deve ficar exposto
+      # na rede/Internet. O 3306 é do MySQL; não usamos aqui.
+      - "127.0.0.1:5432:5432"
     volumes:
       - gohorses_pgdata:/var/lib/postgresql/data
     healthcheck:

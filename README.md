@@ -5,8 +5,8 @@ compradores disputam lances ao vivo e o leilão abre/fecha sozinho, com vencedor
 O **frontend** já estava prototipado; este repositório agora tem também o
 **backend completo** (FastAPI + Prisma + PostgreSQL), com banco populado para demo.
 
-- **Produção prevista na VM:** <http://200.18.99.113:8028>
-  (a porta pública 8028 é encaminhada para a **8080** dentro da VM; ver [Deploy](#deploy-na-vm))
+- **Produção na VM:** <http://200.18.99.113:8088>
+  (a porta pública 8088 é encaminhada para a **8080** dentro da VM; ver [Deploy](#deploy-na-vm))
 - **API local:** <http://localhost:8088>
 - **Documentação interativa (Swagger):** <http://localhost:8088/docs>
 - **Frontend local:** <http://localhost:8080>
@@ -16,7 +16,7 @@ O **frontend** já estava prototipado; este repositório agora tem também o
 
 ```
 navegador
-   │  http://200.18.99.113:8028  (port-forward para 8080)
+   │  http://200.18.99.113:8088  (port-forward para 8080)
    ▼
 ┌───────────────────────────── VM ─────────────────────────────┐
 │ Caddy :8080                                                  │
@@ -314,11 +314,13 @@ da VM.
 
 ## 7. Deploy na VM
 
-Informações das imagens do WhatsApp: IP público **200.18.99.113**, equipe
-**Go Horses = porta 8028**, o frontend **obrigatoriamente escuta na 8080**
-dentro da VM; o port-forward da organização leva `8028 → 8080`. O acesso SSH
-usa a porta e a chave enviadas ao capitão por e-mail (o slide mostra
-`ssh -i ~/.ssh/hackaton -p <porta> ubuntu@200.18.99.113`).
+IP público **200.18.99.113**. O site é acessado em **8088**: o port-forward da
+organização leva `8088 → 8080`, e o Caddy/frontend escuta **8080** dentro da
+VM. O SSH usa a porta **8028** (`8028 → 22`), com a chave enviada ao capitão:
+
+```bash
+ssh -i ~/.ssh/hackaton -p 8028 ubuntu@200.18.99.113
+```
 
 ### 7.1 Pacotes e banco
 
@@ -339,8 +341,8 @@ cd /opt/gohorses/backend
 cp .env.example .env
 nano .env
 # DATABASE_URL="postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public"
-# PUBLIC_BASE_URL="http://200.18.99.113:8028"
-# CORS_ORIGINS="http://200.18.99.113:8028"
+# PUBLIC_BASE_URL="http://200.18.99.113:8088"
+# CORS_ORIGINS="http://200.18.99.113:8088"
 # SECRET_KEY="<uma string longa aleatória>"
 
 python3 -m venv .venv
@@ -382,8 +384,9 @@ sudo systemctl enable --now caddy
 sudo systemctl reload caddy
 ```
 
-Abra <http://200.18.99.113:8028>. O `Caddy` escuta **8080** na VM; a
-organização encaminha a **8028** pública para ela.
+Abra <http://200.18.99.113:8088>. O `Caddy` escuta **8080** na VM; a
+organização encaminha a **8088** pública para ela. A **8028** é o SSH
+(`8028 → 22`) e não deve ser usada pelo site.
 
 > **Fotos:** `PUBLIC_BASE_URL` precisa ser a URL pública para os links das fotos
 > funcionarem. Se mudar esse valor depois do seed, rode `python seed.py` de novo.
