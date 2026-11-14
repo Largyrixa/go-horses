@@ -1,6 +1,7 @@
 services:
   db:
     image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_ROOT_PASSWORD: root_secret
       MYSQL_DATABASE: leilao
@@ -12,7 +13,7 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uleilao", "-pleilao_secret"]
       interval: 3s
       timeout: 3s
-      retries: 15
+      retries: 20
 
   api:
     build: .
@@ -20,9 +21,10 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "3306"
-      DB_USER: root
-      DB_PASSWORD: 
+      DB_USER: leilao
+      DB_PASSWORD: leilao_secret
       DB_NAME: leilao
+      PUBLIC_BASE_URL: http://localhost:8088
     ports:
       - "8088:8088"
     depends_on:
