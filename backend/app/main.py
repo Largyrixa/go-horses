@@ -10,7 +10,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -81,9 +81,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 1. Middleware para liberar o bloqueio de Private Network Access (PNA) do Chrome
+@app.middleware("http")
+async def add_private_network_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+# 2. CORS compatível com Chrome (allow_origin_regex permite credenciais de qualquer origem)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS if CORS_ORIGINS != ["*"] else [],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
