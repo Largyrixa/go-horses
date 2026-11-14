@@ -248,32 +248,56 @@ async def cancel_auction(
     db: Prisma, user: models.User, auction_id: str
 ) -> dict[str, Any]:
     await sync_auctions(db)
-    auction = await get_auction(db, auction_id)
-    if auction.seller_id != user.id:
-        raise ApiError(
-            403, "not_seller", "Só o comitente pode cancelar este leilão."
-        )
-    status = status_value(auction)
-    if status == "cancelled":
-        raise ApiError(409, "already_cancelled", "Este leilão já foi cancelado.")
-    if status not in {"scheduled", "running"}:
-        raise ApiError(
-            409,
-            "not_cancellable",
-            "Este leilão já foi encerrado e não pode ser cancelado.",
-        )
-    if status == "running" and auction.bid_count > 0:
-        raise ApiError(
-            409,
-            "has_bids",
-            "Leilões em andamento com lances não podem ser cancelados.",
-        )
 
-    await db.auction.update(
-        where={"id": auction_id},
-        data={"status": AuctionStatus.cancelled, "cancelled_at": utcnow()},
-    )
-    return auction_dict(await get_auction(db, auction_id))
+    # RF08/RF11: o cancelamento usa o mesmo lock de linha dos lances
+    # (place_bid). Sem ele, um lance poderia entrar entre a leitura de
+    # bid_count e o UPDATE, deixando o leilão cancelado com lances.
+    async with db.tx(timeout=timedelta(seconds=10)) as tx:
+        locked = await tx.query_raw(
+            'SELECT id FROM "auctions" WHERE id = $1 FOR UPDATE',
+            auction_id,
+        )
+        if not locked:
+            raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+
+        auction = await tx.auction.find_unique(
+            where={"id": auction_id}, include=AUCTION_INCLUDE
+        )
+        if auction is None:
+            raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+
+        if auction.seller_id != user.id:
+            raise ApiError(
+                403, "not_seller", "Só o comitente pode cancelar este leilão."
+            )
+        status = status_value(auction)
+        if status == "cancelled":
+            raise ApiError(409, "already_cancelled", "Este leilão já foi cancelado.")
+        if status not in {"scheduled", "running"}:
+            raise ApiError(
+                409,
+                "not_cancellable",
+                "Este leilão já foi encerrado e não pode ser cancelado.",
+            )
+        if status == "running" and auction.bid_count > 0:
+            raise ApiError(
+                409,
+                "has_bids",
+                "Leilões em andamento com lances não podem ser cancelados.",
+            )
+
+        await tx.auction.update(
+            where={"id": auction_id},
+            data={"status": AuctionStatus.cancelled, "cancelled_at": utcnow()},
+        )
+        cancelled = await tx.auction.find_unique(
+            where={"id": auction_id}, include=AUCTION_INCLUDE
+        )
+        if cancelled is None:
+            raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+        result = auction_dict(cancelled)
+
+    return result
 
 
 async def room_payload(

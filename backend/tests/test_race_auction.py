@@ -332,6 +332,49 @@ async def run_cancel_race_round(
         )
 
 
+async def run_cancel_first_check(
+    checker: Checker,
+    client,
+    seller,
+    bidder,
+) -> None:
+    """Caminho determinístico: cancelamento concluído antes do lance."""
+    print("\n-- Cancelamento antes do lance (caminho determinístico) --")
+    auction = await create_auction(
+        client,
+        seller,
+        name="Cancelamento antes do lance",
+        starts_in=0,
+        duration=60,
+        starting_price=10_000,
+    )
+    auction_id = auction["id"]
+
+    response = await client.post(
+        f"/api/auctions/{auction_id}/cancel",
+        headers=auth_headers(seller),
+    )
+    checker.equal("Cancelamento prévio -> 200", response.status_code, 200)
+
+    response = await place_bid(
+        client,
+        bidder,
+        auction_id,
+        auction["min_bid"],
+        f"cancel-first-{uuid.uuid4().hex[:8]}",
+    )
+    checker.equal("Lance em leilão já cancelado -> 409", response.status_code, 409)
+    checker.equal(
+        "Lance em leilão já cancelado retorna auction_closed",
+        error_code(response),
+        "auction_closed",
+    )
+
+    detail = await auction_detail(client, auction_id)
+    checker.equal("Leilão cancelado não registra lance", detail["bid_count"], 0)
+    checker.equal("Status continua cancelled", detail["status"], "cancelled")
+
+
 async def main() -> int:
     parser = build_parser(
         "Testes de concorrência de leilões do Go Horses"
@@ -425,6 +468,8 @@ async def main() -> int:
                 bidder,
                 index,
             )
+
+        await run_cancel_first_check(checker, client, seller, bidders[0])
 
         detail = await auction_detail(client, auction_id)
         checker.equal(

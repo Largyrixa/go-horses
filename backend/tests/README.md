@@ -115,10 +115,9 @@ Se o login falhar, o benchmark continua e apenas pula as rotas autenticadas.
   único lance no banco, uma resposta original e quatro replays.
 - Mesma chave com valor diferente devolve o resultado original.
 - Corrida entre `cancel` e `bid`: o leilão não pode terminar cancelado com
-  lances. O script repete a rodada (`--rounds`, padrão 5) e reporta violações.
-  Essa é uma área sensível: `cancel_auction` lê `bid_count` e depois faz um
-  `UPDATE` sem condição/lock, então a suíte pode encontrar uma condição de
-  corrida real.
+  lances. O script repete a rodada (`--rounds`, padrão 5) e falha se o leilão
+  terminar cancelado com lances. É o teste de regressão da correção de
+  `cancel_auction` (row lock).
 
 Opções úteis:
 
@@ -126,15 +125,14 @@ Opções úteis:
 .venv/bin/python tests/test_race_auction.py --bidders 20 --rounds 10
 ```
 
-#### Resultado conhecido no estado atual
+#### Corrida cancel × bid
 
-`test_auth.py` e `test_sql_injection.py` passam. `test_race_auction.py` acusa
-uma violação real na corrida `cancel` × `bid`: com o código atual, as duas
-operações podem retornar sucesso (`cancel=200`, `bid=201`) e o leilão termina
-`cancelled` com `bid_count=1`. A causa está em `cancel_auction`, que lê
-`bid_count` e depois faz um `UPDATE` sem condição/lock. O teste não mascara a
-falha; `make test` retorna código de saída diferente de zero até o backend ser
-corrigido.
+`cancel_auction` usa a mesma transação com `SELECT ... FOR UPDATE` de
+`place_bid`: se o cancelamento pegar o lock primeiro, o lance espera e recebe
+`auction_closed`; se o lance pegar primeiro, o cancelamento lê `bid_count=1` e
+recebe `has_bids`. O teste `test_race_auction.py` cobre os dois desfechos (a
+corrida concorrente e o caminho determinístico cancelar-depois-lançar) e deve
+passar com 0 falhas.
 
 ### `benchmark.py`
 
