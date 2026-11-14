@@ -159,6 +159,25 @@ Reenvie o mesmo `Idempotency-Key` e o servidor devolve **o mesmo lance**
 (`"replayed": true`), sem duplicar. Mande o mesmo key com valor diferente: a
 resposta original é mantida (RF12).
 
+### 2.1 Suíte automatizada
+
+Além do teste manual acima, o backend tem uma suíte de caixa-preta em
+`backend/tests/`. Ela fala com a API via HTTP/WebSocket e não importa o código
+da aplicação.
+
+```bash
+make test             # auth + SQL injection + corridas + benchmark
+make test-security    # auth/autorização + SQL injection
+make test-race        # concorrência de lances/cancelamento
+make bench            # benchmark de latência
+make load ARGS="--mode both --users 10,50,100"   # carga/capacidade
+```
+
+Os testes criam usuários e leilões de teste; use um banco descartável ou rode
+`make reset` depois. As opções e o detalhamento de cada script estão em
+[`backend/tests/README.md`](backend/tests/README.md). Os resultados da última
+execução local estão na seção 10.
+
 ---
 
 ## 3. O que foi implementado
@@ -439,6 +458,7 @@ go-horses/
 │   │   └── routers/             auth, auctions, me, uploads
 │   ├── prisma/schema.prisma     User, Session, Item, Auction, Bid
 │   ├── static/demo/             fotos SVG do seed
+│   ├── tests/                   auth, SQL injection, corridas, benchmark e carga
 │   ├── seed.py                  dados de demonstração
 │   ├── requirements.txt
 │   └── .env.example
@@ -465,3 +485,100 @@ go-horses/
 | `401` e volta ao login | Sessão expirou (7 dias) ou usuário fez logout em outra aba |
 | Reiniciei e o leilão fechou | Correto: RF18 manda abrir/fechar o que passou do horário |
 | Seed sem fotos | As imagens são locais; o `PUBLIC_BASE_URL` precisa apontar para o backend/Caddy |
+
+---
+
+## 10. Testes automatizados e resultados
+
+> Execução local de referência em **14/11/2026**, com Postgres descartável e a
+> API em `127.0.0.1:8088`, uvicorn em **um worker**. O cliente dos testes rodou
+> na mesma máquina. **Não são números da VM**; use como linha de base e para
+> reproduzir o método.
+
+### 10.1 Suíte funcional e de segurança
+
+| Script | Verificações | Resultado |
+|---|---:|---|
+| `test_auth.py` | 69/69 | OK |
+| `test_sql_injection.py` | 181/181 | OK |
+| `test_race_auction.py` (5 rodadas) | 75/75 | OK |
+| `test_race_auction.py --rounds 10` | 90/90 | OK |
+
+O `run_all.py` terminou com `Resultado: OK` (auth, SQL injection, corridas e
+benchmark). A corrida `cancel × bid` foi validada nas 10 rodadas: **exatamente
+uma operação vence**. Se o lance vence, o cancelamento recebe `has_bids`; no
+caminho determinístico cancelar-depois-lançar, o lance recebe `auction_closed` e
+`bid_count` continua 0. Essa condição de corrida foi encontrada pela própria
+suíte e corrigida com o mesmo `SELECT ... FOR UPDATE` usado nos lances.
+
+### 10.2 Benchmark de leitura
+
+`benchmark.py --requests 300 --concurrency 20 --warmup 20`:
+
+| Endpoint | RPS | p50 | p95 | p99 | Erros |
+|---|---:|---:|---:|---:|---:|
+| `GET /api/health` | 649,6 | 24,2 ms | 64,0 ms | 103,6 ms | 0 |
+| `GET /api/categories` | 680,6 | 16,4 ms | 89,3 ms | 126,8 ms | 0 |
+| `GET /api/auctions` | 190,0 | 98,8 ms | 190,6 ms | 252,5 ms | 0 |
+| `GET /api/auctions/{id}` | 200,3 | 84,9 ms | 197,7 ms | 273,3 ms | 0 |
+| `GET /api/auctions/{id}/room` | 123,4 | 140,8 ms | 289,2 ms | 344,0 ms | 0 |
+
+### 10.3 Teste de carga
+
+Rampa HTTP com SLA de **p95 ≤ 500 ms**, 4 s por nível:
+
+| Usuários | RPS | p50 | p95 | p99 | Erros | CPU uvicorn | Resultado |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 25 | 139,1 | 158,3 ms | 344,2 ms | 439,3 ms | 0% | ~100% | OK |
+| 50 | 144,1 | 307,1 ms | 651,8 ms | 808,1 ms | 0% | ~99% | Falhou no SLA |
+| 100 | 132,9 | 659,8 ms | 1,49 s | 1,98 s | 0% | ~99% | Falhou no SLA |
+
+Todas as requisições responderam sem erro; o limite foi **latência/CPU**. Com
+SLA de 500 ms, a capacidade estimada ficou em **25 usuários simultâneos** no
+ambiente local. O processo do uvicorn já fica em ~100% de CPU nesse nível, então
+o gargalo é o **worker único**, não a taxa de erro.
+
+WebSocket na mesma sala:
+
+| Conexões | Conectadas | Mensagens | Handshake p95 | 1ª msg p95 | Erros | CPU uvicorn | SLA | Resultado |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 10 | 10 | 109 | 87,3 ms | 88,8 ms | 0% | 4,2% | 1 s | OK |
+| 25 | 25 | 605 | 107,2 ms | 117,5 ms | 0% | 8,4% | 1 s | OK |
+| 50 | 50 | 1.778 | 156,0 ms | 172,3 ms | 0% | 15,9% | 1 s | OK |
+| 100 | 100 | 8.186 | 509,2 ms | 522,4 ms | 0% | 32,8% | 500 ms | Falhou no SLA |
+| 250 | 250 | 40.931 | 698,3 ms | 703,1 ms | 0% | 59,0% | 500 ms | Falhou no SLA |
+
+O servidor **aceitou todas as conexões** testadas (até 250). O limite foi a
+latência de handshake/primeira mensagem. O número de mensagens cresce bem mais
+que o de conexões porque cada nova conexão dispara um broadcast de estado para
+a sala inteira; é o ponto natural de otimização se a sala precisar de centenas
+de espectadores.
+
+### 10.4 Como reproduzir e interpretar
+
+```bash
+# suíte funcional + benchmark
+make test
+
+# carga HTTP (SLA de 500 ms)
+make load ARGS="--mode http --users 25,50,100 --http-duration 4 \
+  --sla-p95-ms 500 --keep-going --server-pid $(pgrep -f 'uvicorn app.main')"
+
+# carga WebSocket
+make load ARGS="--mode ws --users 50,100,250 --ws-hold 30 \
+  --sla-p95-ms 1000 --server-pid $(pgrep -f 'uvicorn app.main')"
+```
+
+- Para medir a VM, rode de **outra máquina** com
+  `--base-url http://200.18.99.113:8088`.
+- O cliente também pode ser o gargalo; acompanhe CPU/RSS com `--server-pid`.
+- O teste cria usuários/leilões de carga. Rode em banco descartável ou limpe
+  com `make reset`.
+- Não execute cargas altas contra produção sem autorização.
+
+Os números acima são uma referência local. O caminho mais direto para aumentar a
+capacidade HTTP é reduzir o custo do caminho de leitura (por exemplo, o
+`sync_auctions` executado em cada listagem/detalhe) ou avaliar múltiplos
+workers; no caso de WebSocket, múltiplos workers exigem sessões fixas ou um
+broker compartilhado, porque as salas e contadores são mantidos em memória por
+processo.
