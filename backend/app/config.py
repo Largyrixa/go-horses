@@ -89,9 +89,6 @@ LOGIN_MAX_FAILURES = 10
 LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
 # Sala: tempo para o cliente se autenticar depois de abrir o WebSocket.
 WS_AUTH_TIMEOUT_SECONDS = 3
-# Chat ao vivo da sala: tamanho máximo de mensagem e histórico em memória.
-MAX_CHAT_LENGTH = 500
-CHAT_HISTORY_LIMIT = 50
 RECENT_BIDS = 20
 SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 24 * 60 * 60
 

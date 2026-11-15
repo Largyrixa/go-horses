@@ -29,7 +29,6 @@ TEST_SCRIPTS = (
     "test_sql_injection.py",
     "test_race_auction.py",
     "test_features.py",
-    "test_chat.py",
 )
 
 

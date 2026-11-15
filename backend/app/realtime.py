@@ -3,16 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import secrets
 from dataclasses import dataclass
 
 from fastapi import WebSocket
 
 from .auction_service import room_payload
-from .config import CHAT_HISTORY_LIMIT
 from .db import db
 from .errors import ApiError
-from .serializers import iso, mask_name, utcnow
+from .serializers import iso, utcnow
 
 log = logging.getLogger("gohorses.realtime")
 
@@ -29,7 +27,6 @@ class RoomManager:
     def __init__(self) -> None:
         self._rooms: dict[str, set[Client]] = {}
         self._lock = asyncio.Lock()
-        self._chat: dict[str, list[dict]] = {}
 
     async def add(self, client: Client) -> None:
         async with self._lock:
@@ -42,25 +39,6 @@ class RoomManager:
                 room.discard(client)
                 if not room:
                     self._rooms.pop(client.auction_id, None)
-                    self._chat.pop(client.auction_id, None)
-
-    def chat_history(self, auction_id: str) -> list[dict]:
-        return list(self._chat.get(auction_id, []))
-
-    async def chat(self, auction_id: str, user, text: str) -> None:
-        """Registra e transmite uma mensagem do chat (em memória, por sala)."""
-        message = {
-            "id": secrets.token_hex(8),
-            "user_id": user.id,
-            "display_name": mask_name(user.display_name),
-            "text": text,
-            "sent_at": iso(utcnow()),
-        }
-        history = self._chat.setdefault(auction_id, [])
-        history.append(message)
-        if len(history) > CHAT_HISTORY_LIMIT:
-            del history[: len(history) - CHAT_HISTORY_LIMIT]
-        await self.broadcast(auction_id, {"type": "chat", "message": message})
 
     def counts(self, auction_id: str) -> dict[str, int]:
         # Conta pessoas, não conexões: a mesma conta em várias abas vale 1, e
@@ -95,9 +73,7 @@ class RoomManager:
     async def broadcast_state(self, auction_id: str) -> None:
         counts = self.counts(auction_id)
         try:
-            payload = await room_payload(
-                db, auction_id, **counts, chat=self.chat_history(auction_id)
-            )
+            payload = await room_payload(db, auction_id, **counts)
         except ApiError:
             return
         except Exception:

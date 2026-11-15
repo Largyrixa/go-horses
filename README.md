@@ -252,9 +252,6 @@ Referência: `Requisitos_Leilao_Hackathon.pdf`.
 - RF27: "Minhas participações" com situação `leader` / `outbid` / `won`.
 - RF28: relistagem de leilão Encerrado sem lances ou Cancelado, criando um novo
   leilão para o mesmo item; no máximo um leilão ativo por item.
-- **Chat ao vivo:** participantes e espectadores trocam mensagens em tempo real
-  na sala (WebSocket, em memória por sala). Quem entra vê as últimas 50
-  mensagens; o nome é mascarado e o conteúdo é descartado quando a sala esvazia.
 - RF29–RF32: pontuação e crédito calculados em `/api/auth/me`; dados de demo com
   rendas diferentes. A **exigência** de crédito no lance fica desligada por
   padrão (`ENFORCE_CREDIT=false`), porque o front atual não coleta renda.
@@ -293,7 +290,7 @@ autenticação `Authorization: Bearer <token>`. Erros:
 | GET | `/users/{id}` | — | perfil público do comitente (RF22) |
 | POST | `/uploads/presign` | sim | `{filename,content_type,size}` → `{upload_url,public_url}` |
 | PUT | URL retornada | assinatura | envia o arquivo |
-| WS | `/auctions/{id}/ws?role=participant\|spectator` | token na 1ª mensagem: `{"type":"auth","token":"..."}` (até 3 s após abrir) | sala ao vivo; chat com `{"type":"chat","text":"..."}` |
+| WS | `/auctions/{id}/ws?role=participant\|spectator` | token na 1ª mensagem: `{"type":"auth","token":"..."}` (até 3 s após abrir) | sala ao vivo |
 | GET | `/health` | — | checagem da API + banco |
 
 Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
@@ -557,7 +554,6 @@ go-horses/
 | `test_race_auction.py` (5 rodadas) | 74/74 | OK |
 | `test_race_auction.py --rounds 10` | 89/89 | OK |
 | `test_features.py` | 35/35 | OK |
-| `test_chat.py` | 10/10 | OK |
 
 O `run_all.py` terminou com `Resultado: OK` (auth, SQL injection, corridas,
 features e benchmark). A corrida `cancel × bid` foi validada nas 10 rodadas:

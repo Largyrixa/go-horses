@@ -19,7 +19,6 @@ from ..auction_service import (
 from ..config import (
     CATEGORIES,
     IDEMPOTENCY_HEADER,
-    MAX_CHAT_LENGTH,
     MAX_IDEMPOTENCY_KEY_LENGTH,
     MAX_PAGE,
     MAX_SEARCH_LENGTH,
@@ -104,9 +103,7 @@ async def cancel(auction_id: str, user=Depends(get_current_user)):
 @router.get("/auctions/{auction_id}/room")
 async def room(auction_id: str, user=Depends(get_current_user)):
     counts = rooms.counts(auction_id)
-    return await room_payload(
-        db, auction_id, **counts, chat=rooms.chat_history(auction_id)
-    )
+    return await room_payload(db, auction_id, **counts)
 
 
 @router.post("/auctions/{auction_id}/bids", status_code=201)
@@ -213,16 +210,9 @@ async def auction_ws(
     try:
         await rooms.broadcast_state(auction_id)
         while True:
-            raw = await websocket.receive_text()
-            try:
-                incoming = json.loads(raw)
-            except (ValueError, TypeError):
-                continue
-            # Chat ao vivo: o cliente envia {"type": "chat", "text": "..."}.
-            if isinstance(incoming, dict) and incoming.get("type") == "chat":
-                text = str(incoming.get("text", "")).strip()
-                if text and len(text) <= MAX_CHAT_LENGTH:
-                    await rooms.chat(auction_id, session.user, text)
+            # Nada do que o cliente manda depois da autenticação é usado; só
+            # mantemos a leitura para perceber a desconexão.
+            await websocket.receive_text()
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:

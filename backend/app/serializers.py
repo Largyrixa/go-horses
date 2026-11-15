@@ -155,12 +155,10 @@ def room_state(
     *,
     participants: int,
     spectators: int,
-    recent_chat: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "auction": auction_dict(auction),
         "recent_bids": [bid_dict(bid) for bid in bids[:RECENT_BIDS]],
-        "chat": recent_chat or [],
         "participants": participants,
         "spectators": spectators,
         "server_time": iso(utcnow()),
