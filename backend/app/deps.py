@@ -28,7 +28,7 @@ async def get_current_session(
     if session is None:
         raise ApiError(401, "unauthorized", "Sessão inválida. Entre novamente.")
     if ensure_utc(session.expires_at) <= utcnow():
-        await db.session.delete(where={"id": session.id})
+        await db.session.delete_many(where={"id": session.id})
         raise ApiError(401, "session_expired", "Sua sessão expirou. Entre novamente.")
     if session.user is None:
         raise ApiError(401, "unauthorized", "Sessão inválida. Entre novamente.")

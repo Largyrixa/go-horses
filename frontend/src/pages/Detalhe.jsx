@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -6,7 +6,7 @@ import Button from "@/components/Button";
 import Countdown from "@/components/Countdown";
 import Gallery from "@/components/Gallery";
 import { ErrorNote, StatusBadge } from "@/components/ui";
-import { brl, canCancel, fmtDateTime, maskName } from "@/utils/format";
+import { brl, canCancel, FINAL_STATUS, fmtDateTime, maskName } from "@/utils/format";
 import { confirmDanger, toast } from "@/utils/alerts";
 
 // Detalhe público (RF04: visitante vê tudo, mas só entra na sala logado).
@@ -16,8 +16,18 @@ export default function Detalhe() {
   const [a, setA] = useState(null);
   const [error, setError] = useState(null);
 
-  const load = useCallback(() => api.auction(id).then((r) => { setA(r); setError(null); }).catch(setError), [id]);
-  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
+  const current = useRef(id);
+  const finished = useRef(false);
+  const load = useCallback(() => api.auction(id)
+    .then((r) => { if (current.current !== id) return; finished.current = FINAL_STATUS.includes(r.status); setA(r); setError(null); })
+    .catch((e) => { if (current.current === id) setError(e); }), [id]);
+  useEffect(() => {
+    // Outro leilão: limpa o anterior. Leilão em estado final não muda mais, então para de consultar.
+    current.current = id; finished.current = false; setA(null); setError(null);
+    load();
+    const t = setInterval(() => { if (!finished.current) load(); }, 5000);
+    return () => clearInterval(t);
+  }, [id, load]);
 
   async function cancel() {
     const ok = await confirmDanger({ title: "Cancelar este leilão?", text: "O leilão continua registrado como Cancelado e não pode ser reaberto.", confirmText: "Cancelar leilão" });

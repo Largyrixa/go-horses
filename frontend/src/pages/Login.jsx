@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useRedirectIfLogged } from "@/lib/auth";
 import Button from "@/components/Button";
 import { ErrorNote, Field, PageTitle } from "@/components/ui";
 import { safeNext } from "@/utils/format";
@@ -13,13 +13,16 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+  useRedirectIfLogged(next);
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true); setError(null);
     try {
       await login(email.trim(), password);
-      navigate(safeNext(new URLSearchParams(window.location.search).get("next")));
+      navigate(next, { replace: true });
     } catch (err) {
       setError(err.status === 401 ? "E-mail ou senha incorretos." : err.message);
       setBusy(false);

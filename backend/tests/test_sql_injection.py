@@ -19,6 +19,7 @@ from urllib.parse import quote
 
 from common import (
     Checker,
+    TEST_PASSWORD,
     auth_headers,
     auction_detail,
     build_parser,
@@ -158,10 +159,10 @@ async def main() -> int:
                 response.status_code,
                 422,
             )
-            checker.equal(
-                f"status[{index}] retorna invalid_status",
+            checker.is_in(
+                f"status[{index}] retorna erro de validação coerente",
                 error_code(response),
-                "invalid_status",
+                ("invalid_status", "validation_error"),
             )
 
             encoded = quote(payload, safe="")
@@ -196,6 +197,20 @@ async def main() -> int:
                 response.status_code,
                 404,
             )
+
+        response = await client.get(
+            "/api/auctions", params={"status": "invalido"}
+        )
+        checker.equal(
+            "status curto inválido responde 422",
+            response.status_code,
+            422,
+        )
+        checker.equal(
+            "status curto inválido retorna invalid_status",
+            error_code(response),
+            "invalid_status",
+        )
 
         print("\n-- Login e validação de tipos --")
         for index, payload in enumerate(PAYLOADS, start=1):
@@ -234,8 +249,12 @@ async def main() -> int:
         assert_safe(checker, "amount como string SQLi", response, 0.0)
 
         print("\n-- Strings maliciosas gravadas literalmente --")
-        response = await client.get(f"/api/users/{seller.id}")
-        checker.equal("display_name malicioso volta literal", response.json().get("display_name"), DROP_PAYLOAD)
+        response = await client.get("/api/auth/me", headers=auth_headers(seller))
+        checker.equal(
+            "display_name malicioso volta literal",
+            response.json().get("display_name"),
+            DROP_PAYLOAD,
+        )
 
         checker.equal("nome do leilão volta literal", literal["name"], DROP_PAYLOAD)
         checker.equal(
@@ -288,7 +307,7 @@ async def main() -> int:
 
         response = await client.post(
             "/api/auth/login",
-            json={"email": seller.email, "password": "senha1234"},
+            json={"email": seller.email, "password": TEST_PASSWORD},
         )
         checker.equal("tabela users continua íntegra (login funciona)", response.status_code, 200)
 

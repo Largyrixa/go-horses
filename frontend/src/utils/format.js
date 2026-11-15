@@ -19,13 +19,23 @@ export const canCancel = (a) => a.status === "scheduled" || (a.status === "runni
 export const brl = (cents) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((cents ?? 0) / 100);
 
+// Aceita só formatos sem ambiguidade e devolve null no resto (antes "1,234.56" virava R$ 1,23,
+// "10,999" virava R$ 10,99 e "-5" virava R$ 5,00, tudo em silêncio):
+//   "150"  "150,5"  "150,50"  "1.500"  "1.500,00"   (padrão brasileiro)
+//   "150.5"  "150.50"                               (ponto como decimal)
+//   "1,500.50"                                      (padrão americano, com centavos)
+export const MAX_CENTS = 1_000_000_000; // mesmo teto do back-end (R$ 10 milhões)
 export function parseCents(input) {
-  let s = String(input ?? "").trim().replace(/[^\d.,]/g, "");
-  if (!s) return null;
-  if (!s.includes(",") && /\.\d{1,2}$/.test(s)) s = s.replace(/\.(\d{1,2})$/, ",$1"); // "100.50" -> "100,50"
-  const [int, dec = ""] = s.replace(/\./g, "").split(",");
-  if (!/^\d+$/.test(int || "0")) return null;
-  return parseInt(int || "0", 10) * 100 + parseInt((dec + "00").slice(0, 2), 10);
+  const s = String(input ?? "").trim().replace(/^R\$\s*/i, "").replace(/\s+/g, "");
+  let int, dec;
+  let m;
+  if ((m = /^(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/.exec(s))) { int = m[1].replace(/\./g, ""); dec = m[2]; }
+  else if ((m = /^(\d+)\.(\d{1,2})$/.exec(s))) { int = m[1]; dec = m[2]; }
+  else if ((m = /^(\d{1,3}(?:,\d{3})+)\.(\d{1,2})$/.exec(s))) { int = m[1].replace(/,/g, ""); dec = m[2]; }
+  else return null;
+  if (int.length > 9) return null;
+  const cents = parseInt(int, 10) * 100 + parseInt(((dec ?? "") + "00").slice(0, 2), 10);
+  return cents > MAX_CENTS ? null : cents;
 }
 export const centsToInput = (c) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, "0")}`;
 
@@ -58,4 +68,5 @@ export const toLocalInput = (d) => {
 };
 export const newKey = () =>
   typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-export const safeNext = (n) => (n && n.startsWith("/") && !n.startsWith("//") ? n : "/");
+export const safeNext = (n) => (n && n.startsWith("/") && !n.startsWith("//") && !n.includes("\\") ? n : "/");
+export const plural = (n, one, many) => `${n ?? 0} ${n === 1 ? one : many}`;

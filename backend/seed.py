@@ -4,7 +4,11 @@ Uso:
     python seed.py
 
 ATENÇÃO: apaga todos os dados atuais e recria as contas/leilões de demo.
-Contas (senha: senha1234):
+A senha das contas vem de SEED_PASSWORD (backend/.env). Sem ela, o seed gera
+uma senha aleatória e mostra no final: uma senha fixa no repositório público
+daria acesso às contas de demonstração de qualquer ambiente publicado.
+
+Contas:
     ana@go-horses.dev      comitente
     bruno@go-horses.dev    comprador
     carla@go-horses.dev    compradora (conta antiga, para testar pontuação)
@@ -14,6 +18,8 @@ Contas (senha: senha1234):
 from __future__ import annotations
 
 import asyncio
+import os
+import secrets
 from datetime import timedelta
 
 from prisma.enums import AuctionStatus
@@ -23,7 +29,9 @@ from app.db import db
 from app.security import hash_password
 from app.serializers import utcnow
 
-PASSWORD = "senha1234"
+PASSWORD = os.getenv("SEED_PASSWORD", "").strip() or secrets.token_urlsafe(12)
+if len(PASSWORD) < 8:
+    raise SystemExit("SEED_PASSWORD precisa ter pelo menos 8 caracteres.")
 
 
 def photos(slug: str) -> list[str]:
@@ -271,7 +279,7 @@ async def main() -> None:
     print("Banco populado com sucesso:")
     for key, value in counts.items():
         print(f"  {key}: {value}")
-    print("\nContas de demonstração (senha: senha1234):")
+    print(f"\nContas de demonstração (senha: {PASSWORD}):")
     for email in (
         "ana@go-horses.dev",
         "bruno@go-horses.dev",

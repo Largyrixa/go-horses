@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import Button from "@/components/Button";
 import { Empty, ErrorNote, PageTitle, StatusBadge } from "@/components/ui";
-import { brl, canCancel, fmtDateTime } from "@/utils/format";
+import { brl, canCancel, fmtDateTime, plural } from "@/utils/format";
 import { confirmDanger, toast } from "@/utils/alerts";
 
 // Leilões do comitente, com cancelamento (RF08).
@@ -12,7 +12,7 @@ export default function MeusLeiloes() {
   const { user, loading } = useRequireAuth();
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
-  const load = useCallback(() => api.myAuctions().then((r) => setItems(r.items ?? r)).catch(setError), []);
+  const load = useCallback(() => api.myAuctions().then((r) => { setItems(r.items ?? r); setError(null); }).catch(setError), []);
   useEffect(() => { if (user) load(); }, [user, load]);
 
   async function cancel(a) {
@@ -33,7 +33,7 @@ export default function MeusLeiloes() {
           <li key={a.id} className="panel flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0">
               <Link to={`/leiloes/${a.id}`} className="block truncate text-lg font-bold text-white hover:text-primary">{a.name}</Link>
-              <p className="mt-1 flex items-center gap-3 text-sm text-gray"><StatusBadge status={a.status} /> {fmtDateTime(a.starts_at)} · {a.bid_count ?? 0} lances · {brl(a.bid_count > 0 ? a.current_price : a.starting_price)}</p>
+              <p className="mt-1 flex items-center gap-3 text-sm text-gray"><StatusBadge status={a.status} /> {fmtDateTime(a.starts_at)} · {plural(a.bid_count, "lance", "lances")} · {brl(a.bid_count > 0 ? a.current_price : a.starting_price)}</p>
             </div>
             <div className="flex gap-2">
               {a.status === "running" && <Button href={`/leiloes/${a.id}/sala`} variant="ghost">Sala</Button>}

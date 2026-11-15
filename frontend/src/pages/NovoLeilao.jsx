@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { api, uploadPhoto } from "@/lib/api";
@@ -6,6 +6,8 @@ import { useRequireAuth } from "@/lib/auth";
 import Button from "@/components/Button";
 import { ErrorNote, Field, PageTitle } from "@/components/ui";
 import { DEFAULT_CATEGORIES, parseCents, toLocalInput } from "@/utils/format";
+
+const MAX_MINUTES = 7 * 24 * 60; // mesmo teto do back-end (7 dias)
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 const MIN_PHOTOS = Number(import.meta.env.VITE_MIN_PHOTOS || 3);
@@ -30,42 +32,61 @@ export default function NovoLeilao() {
     api.categories().then((c) => Array.isArray(c) && c.length && setCats(c)).catch(() => {});
   }, []);
 
+  // Libera as prévias (blob:) ao sair da tela.
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+
   function addFiles(list) {
     const ok = [], errs = [];
+    const room = MAX_PHOTOS - photos.length;
     for (const file of Array.from(list)) {
       if (!ALLOWED.includes(file.type)) errs.push(`${file.name}: use JPG, PNG ou WebP.`);
       else if (file.size > MAX_MB * 1048576) errs.push(`${file.name}: passa de ${MAX_MB} MB.`);
-      else ok.push({ file, url: URL.createObjectURL(file) });
+      else if (file.size === 0) errs.push(`${file.name}: arquivo vazio.`);
+      else if (ok.length >= room) errs.push(`${file.name}: ficou de fora, o limite é de ${MAX_PHOTOS} fotos.`);
+      else ok.push({ file, url: URL.createObjectURL(file), uploaded: null });
     }
-    setPhotos((p) => [...p, ...ok].slice(0, MAX_PHOTOS));
+    setPhotos((p) => [...p, ...ok]);
     setPhotoErr(errs.join(" "));
   }
-  const removePhoto = (i) => setPhotos((p) => { URL.revokeObjectURL(p[i].url); return p.filter((_, j) => j !== i); });
+  function removePhoto(i) {
+    if (busy) return; // não mexe na lista durante o envio
+    const gone = photos[i];
+    if (!gone) return;
+    setPhotos((p) => p.filter((x) => x !== gone));
+    URL.revokeObjectURL(gone.url);
+  }
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     const price = parseCents(f.price);
     const start = new Date(f.start);
     const minutes = Number(f.minutes);
-    if (!price || price <= 0) return setError("Informe um preço inicial maior que zero, por exemplo 150,00.");
+    if (!f.name.trim() || !f.description.trim()) return setError("Preencha o nome e a descrição do item.");
+    if (!price || price <= 0) return setError("Informe um preço inicial válido e maior que zero, por exemplo 150,00.");
     if (Number.isNaN(start.getTime())) return setError("Informe a data e a hora de início.");
-    if (!(minutes >= 1)) return setError("A duração mínima é de 1 minuto.");
+    if (!Number.isInteger(minutes) || minutes < 1) return setError("A duração precisa ser um número inteiro de minutos, no mínimo 1.");
+    if (minutes > MAX_MINUTES) return setError("A duração máxima é de 7 dias (10080 minutos).");
     if (photos.length < MIN_PHOTOS) return setError(`Envie pelo menos ${MIN_PHOTOS} fotos (faltam ${MIN_PHOTOS - photos.length}).`);
 
     setBusy(true);
     try {
       let done = 0;
       setProgress(`Enviando fotos (0 de ${photos.length})…`);
+      // Guarda a URL de cada foto já enviada: se algo falhar depois (outra foto, a criação do
+      // leilão), tentar de novo não reenvia nem deixa cópias órfãs no servidor.
       const urls = await Promise.all(photos.map(async (p) => {
-        const u = await uploadPhoto(p.file);
+        if (!p.uploaded) p.uploaded = await uploadPhoto(p.file);
         setProgress(`Enviando fotos (${++done} de ${photos.length})…`);
-        return u;
+        return p.uploaded;
       }));
       setProgress("Criando o leilão…");
       const a = await api.createAuction({
         name: f.name.trim(), description: f.description.trim(), category: f.category, photos: urls,
-        starting_price: price, starts_at: start.toISOString(), duration_seconds: Math.round(minutes * 60),
+        starting_price: price, starts_at: start.toISOString(), duration_seconds: minutes * 60,
       });
       navigate(`/leiloes/${a.id}`);
     } catch (err) {
@@ -95,7 +116,7 @@ export default function NovoLeilao() {
           <Field label="Preço inicial (R$)" hint="Use vírgula para os centavos."><input className="field" inputMode="decimal" required placeholder="150,00" value={f.price} onChange={set("price")} /></Field>
           <Field label="Início" hint={`Seu fuso: ${tz}`}><input className="field" type="datetime-local" required value={f.start} onChange={set("start")} /></Field>
           <Field label="Duração (minutos)" hint="Para a demo, use 3.">
-            <input className="field" type="number" min="1" step="1" required value={f.minutes} onChange={set("minutes")} />
+            <input className="field" type="number" min="1" max={MAX_MINUTES} step="1" required value={f.minutes} onChange={set("minutes")} />
           </Field>
         </div>
         <div className="-mt-3 flex flex-wrap gap-2" aria-label="Atalhos de horário">

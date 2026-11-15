@@ -67,7 +67,8 @@ POST /auctions/:id/bids {amount}  + Idempotency-Key             -> 201 {bid,auct
                                   erro -> {error:{code,message,min_bid}}
 GET  /me/auctions · GET /me/participations                      -> [{auction,situation:"leader|outbid|won",my_top_bid}]
 POST /uploads/presign {filename,content_type,size}              -> {upload_url,public_url}   (o cliente faz PUT)
-WS   /auctions/:id/ws?token=&role=participant|spectator         -> {auction?,recent_bids?,bid?,participants?,spectators?}
+WS   /auctions/:id/ws?role=participant|spectator                -> {auction?,recent_bids?,bid?,participants?,spectators?}
+     (1ª mensagem do cliente: {"type":"auth","token":"..."}; o token não vai na URL)
 
 Auction = {id,name,description,category,photos:[url],seller:{id,display_name},
            status:"scheduled|running|sold|unsold|cancelled",starting_price,current_price,min_bid,

@@ -9,21 +9,52 @@
 #   sudo systemctl reload caddy
 #
 # O reverse_proxy do Caddy cuida do Upgrade/Connection do WebSocket sozinho.
-# O backend valida o tamanho das fotos (5 MB); não é preciso limite extra aqui.
+# O backend valida o tamanho das fotos (5 MB); o limite de 6 MB aqui só corta
+# cedo corpos absurdos, antes de chegarem ao Python.
+#
+# ATENÇÃO: este site ainda é servido em HTTP puro. Senhas e tokens de sessão
+# trafegam sem criptografia. Quando houver um domínio apontando para a VM,
+# troque ":8080" pelo domínio para o Caddy emitir o certificado e servir HTTPS.
 
 :8080 {
 	encode gzip zstd
+
+	# Cabeçalhos de segurança em todas as respostas. `defer` aplica na hora de
+	# escrever a resposta, substituindo o que vier do backend (sem duplicar).
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+		defer
+	}
 
 	# REST + WebSocket + fotos + imagens de demonstração.
 	# Os caminhos "sem barra" cobrem requisições exatas (ex.: /health).
 	@backend path /api /api/* /uploads /uploads/* /static /static/* /health
 	handle @backend {
+		request_body {
+			max_size 6MB
+		}
 		reverse_proxy 127.0.0.1:8088
 	}
 
-	# SPA (React Router): qualquer rota desconhecida cai no index.html.
+	# Arquivos do build (nome com hash). Um arquivo que não existe responde 404
+	# de verdade; antes caía no index.html com status 200.
+	handle /assets/* {
+		root * /var/www/gohorses/frontend/dist
+		@exists file
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# SPA (React Router): qualquer rota desconhecida cai no index.html, que não
+	# deve ficar em cache (é ele que aponta para os arquivos novos do build).
 	handle {
 		root * /var/www/gohorses/frontend/dist
+		header Cache-Control "no-cache"
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		try_files {path} /index.html
 		file_server
 	}

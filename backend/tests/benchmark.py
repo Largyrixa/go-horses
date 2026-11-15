@@ -30,7 +30,11 @@ from common import (
 )
 
 DEFAULT_EMAIL = os.getenv("GOHORSES_EMAIL", "bruno@go-horses.dev")
-DEFAULT_PASSWORD = os.getenv("GOHORSES_PASSWORD", "senha1234")
+DEFAULT_PASSWORD = (
+    os.getenv("GOHORSES_PASSWORD")
+    or os.getenv("SEED_PASSWORD")
+    or "senha1234"
+)
 
 
 @dataclass

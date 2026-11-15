@@ -67,16 +67,34 @@ def asset_path(url: str) -> str:
     return url
 
 
+def mask_name(name: str | None) -> str:
+    """Primeiro nome + inicial do último (RF09), igual ao que o front exibe.
+
+    O mascaramento é feito aqui, no servidor: as rotas de leilão são públicas
+    e antes devolviam o nome completo de comitente, líder e vencedor.
+    """
+    parts = str(name or "").split()
+    if not parts:
+        return "—"
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
+
 def short_user(user: models.User | None) -> dict[str, Any] | None:
     if user is None:
         return None
-    return {"id": user.id, "display_name": user.display_name}
+    return {"id": user.id, "display_name": mask_name(user.display_name)}
 
 
 def user_dict(user: models.User, *, include_email: bool = True) -> dict[str, Any]:
+    """`include_email=True` é a visão do próprio usuário (nome completo e e-mail).
+
+    A visão pública (`include_email=False`) leva o nome mascarado.
+    """
     data = {
         "id": user.id,
-        "display_name": user.display_name,
+        "display_name": user.display_name if include_email else mask_name(user.display_name),
         "created_at": iso(user.created_at),
     }
     if include_email:
@@ -121,7 +139,7 @@ def bid_dict(bid: models.Bid) -> dict[str, Any]:
         "amount": bid.amount_cents,
         "created_at": iso(bid.created_at),
         "bidder": short_user(bidder),
-        "bidder_name": bidder.display_name if bidder else None,
+        "bidder_name": mask_name(bidder.display_name) if bidder else None,
     }
 
 

@@ -67,12 +67,12 @@ cd backend
 GOHORSES_API=http://127.0.0.1:8088 .venv/bin/python tests/test_auth.py
 ```
 
-O benchmark usa, por padrão, a conta de seed `bruno@go-horses.dev`
-(`senha1234`). Para outra conta:
+O benchmark usa, por padrão, a conta de seed `bruno@go-horses.dev` com a senha
+de `GOHORSES_PASSWORD` (a mesma `SEED_PASSWORD` usada no seed). Para outra conta:
 
 ```bash
 .venv/bin/python tests/benchmark.py \
-  --email carla@go-horses.dev --password senha1234
+  --email carla@go-horses.dev --password "$SEED_PASSWORD"
 ```
 
 Se o login falhar, o benchmark continua e apenas pula as rotas autenticadas.
@@ -114,7 +114,7 @@ Se o login falhar, o benchmark continua e apenas pula as rotas autenticadas.
 - Nova rodada com o novo mínimo: preço monotônico e `bid_count` coerente.
 - Mesma `Idempotency-Key` enviada 5 vezes em paralelo: um único `bid.id`, um
   único lance no banco, uma resposta original e quatro replays.
-- Mesma chave com valor diferente devolve o resultado original.
+- Mesma chave com valor diferente é recusada com `409 idempotency_key_reused`.
 - Corrida entre `cancel` e `bid`: o leilão não pode terminar cancelado com
   lances. O script repete a rodada (`--rounds`, padrão 5) e falha se o leilão
   terminar cancelado com lances. É o teste de regressão da correção de

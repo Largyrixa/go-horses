@@ -41,10 +41,12 @@ class RoomManager:
                     self._rooms.pop(client.auction_id, None)
 
     def counts(self, auction_id: str) -> dict[str, int]:
+        # Conta pessoas, não conexões: a mesma conta em várias abas vale 1, e
+        # quem participa em alguma aba não entra também como espectador.
         room = self._rooms.get(auction_id, set())
-        participants = sum(1 for client in room if client.role == "participant")
-        spectators = sum(1 for client in room if client.role == "spectator")
-        return {"participants": participants, "spectators": spectators}
+        participants = {c.user_id for c in room if c.role == "participant"}
+        spectators = {c.user_id for c in room if c.role == "spectator"} - participants
+        return {"participants": len(participants), "spectators": len(spectators)}
 
     async def broadcast(self, auction_id: str, payload: dict) -> None:
         room = list(self._rooms.get(auction_id, set()))

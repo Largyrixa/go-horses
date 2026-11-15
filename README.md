@@ -110,7 +110,11 @@ npm run build && npm run preview
 
 ### 1.4 Contas de demonstração
 
-Senha de todas: **`senha1234`**
+Senha de todas: a definida em `SEED_PASSWORD` no `backend/.env`. Sem essa
+variável, o `make seed` gera uma senha aleatória e mostra no terminal. Não
+publique um ambiente com senha de demonstração conhecida. Para os exemplos de
+`curl` abaixo, exporte a mesma senha no shell
+(`export SEED_PASSWORD='sua-senha'`).
 
 | E-mail | Papel | Observação |
 |---|---|---|
@@ -153,7 +157,7 @@ Exemplo de lance via `curl` (o `Idempotency-Key` é obrigatório — RF12):
 ```bash
 TOKEN=$(curl -s http://localhost:8088/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"bruno@go-horses.dev","password":"senha1234"}' | jq -r .token)
+  -d '{"email":"bruno@go-horses.dev","password":"'"$SEED_PASSWORD"'"}' | jq -r .token)
 
 AUCTION=$(curl -s 'http://localhost:8088/api/auctions?status=running' | jq -r '.items[0].id')
 
@@ -165,8 +169,8 @@ curl -s -X POST "http://localhost:8088/api/auctions/$AUCTION/bids" \
 ```
 
 Reenvie o mesmo `Idempotency-Key` e o servidor devolve **o mesmo lance**
-(`"replayed": true`), sem duplicar. Mande o mesmo key com valor diferente: a
-resposta original é mantida (RF12).
+(`"replayed": true`), sem duplicar. Reutilizar a mesma chave com outro valor é
+recusado com `409 idempotency_key_reused` (RF12).
 
 ### 2.1 Suíte automatizada
 
@@ -264,7 +268,7 @@ autenticação `Authorization: Bearer <token>`. Erros:
 | GET | `/users/{id}` | — | perfil público do comitente (RF22) |
 | POST | `/uploads/presign` | sim | `{filename,content_type,size}` → `{upload_url,public_url}` |
 | PUT | URL retornada | assinatura | envia o arquivo |
-| WS | `/auctions/{id}/ws?token=&role=participant\|spectator` | token | sala ao vivo |
+| WS | `/auctions/{id}/ws?role=participant\|spectator` | token na 1ª mensagem: `{"type":"auth","token":"..."}` (até 3 s após abrir) | sala ao vivo |
 | GET | `/health` | — | checagem da API + banco |
 
 Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
@@ -312,8 +316,9 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
 | Variável | Padrão | Para que serve |
 |---|---|---|
 | `DATABASE_URL` | `postgresql://gohorses:gohorses@localhost:5432/gohorses?schema=public` | conexão do Prisma |
-| `SECRET_KEY` | — | assina URLs de upload; troque em produção |
-| `CORS_ORIGINS` | `http://localhost:8080,...` | origens liberadas (separadas por vírgula) |
+| `SECRET_KEY` | — | assina URLs de upload; use um valor próprio com 16+ caracteres (o de exemplo é ignorado e vira uma chave aleatória por processo) |
+| `CORS_ORIGINS` | `http://localhost:8080,...` | origens de OUTROS sites autorizadas a chamar a API (separadas por vírgula; `*` não é aceito) |
+| `SEED_PASSWORD` | aleatória | senha das contas criadas pelo `make seed` |
 | `PUBLIC_BASE_URL` | vazio | base opcional das URLs de fotos; vazio = caminhos relativos |
 | `UPLOAD_DIR` | `./uploads` | pasta dos arquivos enviados |
 | `UPLOAD_MAX_BYTES` | `5242880` | tamanho máximo por foto (5 MB) |
@@ -513,10 +518,10 @@ go-horses/
 
 | Script | Verificações | Resultado |
 |---|---:|---|
-| `test_auth.py` | 69/69 | OK |
-| `test_sql_injection.py` | 181/181 | OK |
-| `test_race_auction.py` (5 rodadas) | 75/75 | OK |
-| `test_race_auction.py --rounds 10` | 90/90 | OK |
+| `test_auth.py` | 70/70 | OK |
+| `test_sql_injection.py` | 183/183 | OK |
+| `test_race_auction.py` (5 rodadas) | 74/74 | OK |
+| `test_race_auction.py --rounds 10` | 89/89 | OK |
 
 O `run_all.py` terminou com `Resultado: OK` (auth, SQL injection, corridas e
 benchmark). A corrida `cancel × bid` foi validada nas 10 rodadas: **exatamente
@@ -531,11 +536,11 @@ suíte e corrigida com o mesmo `SELECT ... FOR UPDATE` usado nos lances.
 
 | Endpoint | RPS | p50 | p95 | p99 | Erros |
 |---|---:|---:|---:|---:|---:|
-| `GET /api/health` | 649,6 | 24,2 ms | 64,0 ms | 103,6 ms | 0 |
-| `GET /api/categories` | 680,6 | 16,4 ms | 89,3 ms | 126,8 ms | 0 |
-| `GET /api/auctions` | 190,0 | 98,8 ms | 190,6 ms | 252,5 ms | 0 |
-| `GET /api/auctions/{id}` | 200,3 | 84,9 ms | 197,7 ms | 273,3 ms | 0 |
-| `GET /api/auctions/{id}/room` | 123,4 | 140,8 ms | 289,2 ms | 344,0 ms | 0 |
+| `GET /api/health` | 563,2 | 28,5 ms | 73,7 ms | 89,6 ms | 0 |
+| `GET /api/categories` | 749,9 | 17,7 ms | 81,0 ms | 112,1 ms | 0 |
+| `GET /api/auctions` | 186,4 | 97,0 ms | 187,7 ms | 229,6 ms | 0 |
+| `GET /api/auctions/{id}` | 214,6 | 84,1 ms | 175,8 ms | 217,3 ms | 0 |
+| `GET /api/auctions/{id}/room` | 137,3 | 134,9 ms | 235,3 ms | 302,6 ms | 0 |
 
 ### 10.3 Teste de carga
 
@@ -543,9 +548,9 @@ Rampa HTTP com SLA de **p95 ≤ 500 ms**, 4 s por nível:
 
 | Usuários | RPS | p50 | p95 | p99 | Erros | CPU uvicorn | Resultado |
 |---:|---:|---:|---:|---:|---:|---:|---|
-| 25 | 139,1 | 158,3 ms | 344,2 ms | 439,3 ms | 0% | ~100% | OK |
-| 50 | 144,1 | 307,1 ms | 651,8 ms | 808,1 ms | 0% | ~99% | Falhou no SLA |
-| 100 | 132,9 | 659,8 ms | 1,49 s | 1,98 s | 0% | ~99% | Falhou no SLA |
+| 25 | 148,4 | 147,8 ms | 345,0 ms | 419,2 ms | 0% | ~100% | OK |
+| 50 | 151,0 | 298,4 ms | 600,4 ms | 821,0 ms | 0% | ~99% | Falhou no SLA |
+| 100 | 133,3 | 633,3 ms | 1,41 s | 1,88 s | 0% | ~99% | Falhou no SLA |
 
 Todas as requisições responderam sem erro; o limite foi **latência/CPU**. Com
 SLA de 500 ms, a capacidade estimada ficou em **25 usuários simultâneos** no
@@ -556,17 +561,18 @@ WebSocket na mesma sala:
 
 | Conexões | Conectadas | Mensagens | Handshake p95 | 1ª msg p95 | Erros | CPU uvicorn | SLA | Resultado |
 |---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 10 | 10 | 109 | 87,3 ms | 88,8 ms | 0% | 4,2% | 1 s | OK |
-| 25 | 25 | 605 | 107,2 ms | 117,5 ms | 0% | 8,4% | 1 s | OK |
-| 50 | 50 | 1.778 | 156,0 ms | 172,3 ms | 0% | 15,9% | 1 s | OK |
-| 100 | 100 | 8.186 | 509,2 ms | 522,4 ms | 0% | 32,8% | 500 ms | Falhou no SLA |
-| 250 | 250 | 40.931 | 698,3 ms | 703,1 ms | 0% | 59,0% | 500 ms | Falhou no SLA |
+| 10 | 10 | 106 | 10,7 ms | 74,4 ms | 0% | 3,6% | 1 s | OK |
+| 25 | 25 | 693 | 17,6 ms | 155,4 ms | 0% | 8,1% | 1 s | OK |
+| 50 | 50 | 2.505 | 65,3 ms | 452,0 ms | 0% | 17,3% | 1 s | OK |
+| 100 | 100 | 8.324 | 35,1 ms | 404,5 ms | 0% | 29,3% | 500 ms | OK |
+| 250 | 250 | 42.709 | 30,1 ms | 682,0 ms | 0% | 57,3% | 500 ms | Falhou no SLA |
 
-O servidor **aceitou todas as conexões** testadas (até 250). O limite foi a
-latência de handshake/primeira mensagem. O número de mensagens cresce bem mais
-que o de conexões porque cada nova conexão dispara um broadcast de estado para
-a sala inteira; é o ponto natural de otimização se a sala precisar de centenas
-de espectadores.
+O servidor **aceitou todas as conexões** testadas (até 250). Com SLA de 500 ms, a
+capacidade estimada ficou em **100 conexões simultâneas**; 250 conexões foram
+aceitas, mas a primeira mensagem p95 ficou em 682 ms. O número de mensagens
+cresce bem mais que o de conexões porque cada nova conexão dispara um broadcast
+de estado para a sala inteira; é o ponto natural de otimização se a sala
+precisar de centenas de espectadores.
 
 ### 10.4 Como reproduzir e interpretar
 

@@ -51,6 +51,15 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+# Hash de uma senha aleatória, usado quando o e-mail não existe: assim o login
+# gasta o mesmo tempo com ou sem conta e não revela quais e-mails têm cadastro.
+_DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
+
+
+def verify_dummy_password(password: str) -> None:
+    verify_password(password, _DUMMY_HASH)
+
+
 def new_session_token() -> str:
     return secrets.token_urlsafe(32)
 

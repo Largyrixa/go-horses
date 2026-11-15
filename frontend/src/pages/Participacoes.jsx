@@ -21,10 +21,13 @@ export default function Participacoes() {
 
   useEffect(() => {
     if (!user) return;
-    const load = () => api.myParticipations().then((r) => setItems(r.items ?? r)).catch(setError);
+    let active = true;
+    const load = () => api.myParticipations()
+      .then((r) => { if (active) { setItems(r.items ?? r); setError(null); } })
+      .catch((e) => { if (active) setError(e); });
     load();
     const t = setInterval(load, 8000);
-    return () => clearInterval(t);
+    return () => { active = false; clearInterval(t); };
   }, [user]);
 
   if (loading || !user) return <p className="text-gray" role="status">Carregando…</p>;

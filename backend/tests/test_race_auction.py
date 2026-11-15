@@ -5,7 +5,7 @@ Cenários:
   1. Vários usuários enviam o mesmo lance mínimo ao mesmo tempo.
   2. Vários usuários disputam o novo lance mínimo ao mesmo tempo.
   3. Mesmo usuário reenvia a mesma Idempotency-Key em paralelo.
-  4. Mesma chave com valor diferente mantém a resposta original.
+  4. Mesma chave com valor diferente é recusada (idempotency_key_reused).
   5. Corrida entre cancelamento e lance: o leilão não pode ficar cancelado
      com lances.
 
@@ -194,7 +194,6 @@ async def run_idempotency_round(
     )
 
     if bodies:
-        original = bodies[0]
         response = await place_bid(
             client,
             candidate,
@@ -203,32 +202,25 @@ async def run_idempotency_round(
             key,
         )
         checker.equal(
-            "Mesma chave com valor diferente -> 201",
+            "Mesma chave com valor diferente -> 409",
             response.status_code,
-            201,
+            409,
         )
-        if response.status_code == 201:
-            replay = response.json()
-            checker.equal(
-                "Mesma chave com valor diferente é replay",
-                replay.get("replayed"),
-                True,
-            )
-            checker.equal(
-                "Mesma chave mantém o id original",
-                replay["bid"]["id"],
-                original["bid"]["id"],
-            )
-            checker.equal(
-                "Mesma chave mantém o valor original",
-                replay["bid"]["amount"],
-                amount,
-            )
+        checker.equal(
+            "Mesma chave com valor diferente retorna idempotency_key_reused",
+            error_code(response),
+            "idempotency_key_reused",
+        )
         unchanged = await auction_detail(client, auction_id)
         checker.equal(
             "Mesma chave não cria segundo lance",
             unchanged["bid_count"],
             before_count + 1,
+        )
+        checker.equal(
+            "Mesma chave não altera o preço atual",
+            unchanged["current_price"],
+            amount,
         )
     return after, amount
 

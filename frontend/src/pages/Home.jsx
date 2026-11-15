@@ -29,18 +29,22 @@ export default function Home() {
   const [error, setError] = useState(null);
   const reqId = useRef(0);
 
-  const load = useCallback(async (p, append) => {
+  // `silent` = atualização de fundo: não liga o "carregando" (que piscava e desabilitava o
+  // "Carregar mais" a cada 10 s) e, se falhar, mantém a lista que já está na tela.
+  const load = useCallback(async (p, append, silent = false) => {
     const my = ++reqId.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const r = await api.auctions({ q: q.trim(), category, status, page: p });
       if (my !== reqId.current) return;
-      setItems((prev) => (append ? [...prev, ...r.items] : r.items));
+      // Ao acrescentar uma página, ignora o que já está na lista: leilões abrem e fecham entre
+      // uma página e outra, e o mesmo item repetido duplicava o card.
+      setItems((prev) => (append ? [...prev, ...r.items.filter((n) => !prev.some((o) => o.id === n.id))] : r.items));
       setMore(!!r.has_more);
       setPage(p);
       setError(null);
     } catch (e) {
-      if (my === reqId.current) setError(e);
+      if (my === reqId.current && !silent) setError(e);
     } finally {
       if (my === reqId.current) setLoading(false);
     }
@@ -51,7 +55,7 @@ export default function Home() {
   // Mantém a primeira página fresca: leilões abrem e fecham sozinhos.
   useEffect(() => {
     if (page !== 1) return;
-    const id = setInterval(() => load(1, false), 10000);
+    const id = setInterval(() => load(1, false, true), 10000);
     return () => clearInterval(id);
   }, [load, page]);
 

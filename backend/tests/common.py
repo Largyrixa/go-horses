@@ -23,7 +23,11 @@ except ModuleNotFoundError:
     )
 
 DEFAULT_BASE_URL = os.getenv("GOHORSES_API", "http://127.0.0.1:8088").rstrip("/")
-TEST_PASSWORD = "senha1234"
+TEST_PASSWORD = (
+    os.getenv("GOHORSES_PASSWORD")
+    or os.getenv("SEED_PASSWORD")
+    or "senha1234"
+)
 TEST_EMAIL_DOMAIN = "go-horses.dev"
 PHOTOS = [f"/static/demo/bike-{index}.svg" for index in range(1, 4)]
 

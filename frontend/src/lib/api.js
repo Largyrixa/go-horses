@@ -21,18 +21,26 @@ export class ApiError extends Error {
 }
 
 // RF16: o relógio que vale é o do servidor. Guardamos a diferença só para desenhar a contagem.
+// O `server_time` do corpo tem milissegundos; o cabeçalho Date só tem segundos. Depois de uma
+// leitura precisa, o Date não sobrescreve mais (alternar entre os dois fazia a contagem "pular").
 let clockOffset = 0;
+let preciseClock = false;
 export const serverNow = () => Date.now() + clockOffset;
 function syncClock(res, body) {
-  const t = body?.server_time ? Date.parse(body.server_time) : Date.parse(res.headers.get("Date") || "");
+  const exact = body?.server_time ? Date.parse(body.server_time) : NaN;
+  if (!Number.isNaN(exact)) { clockOffset = exact - Date.now(); preciseClock = true; return; }
+  if (preciseClock) return;
+  const t = Date.parse(res.headers.get("Date") || "");
   if (!Number.isNaN(t)) clockOffset = t - Date.now();
 }
 
 const qs = (o = {}) =>
   Object.entries(o).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
 
-async function request(path, { method = "GET", body, headers = {} } = {}) {
-  const token = getToken();
+// `auth: false` = chamada que não depende da sessão (login, cadastro, logout): não envia o
+// token nem dispara o aviso de "sessão expirou" quando a resposta é 401.
+async function request(path, { method = "GET", body, headers = {}, auth = true, token: explicit } = {}) {
+  const token = explicit ?? (auth ? getToken() : null);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   let res;
@@ -51,7 +59,8 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
   try { data = res.status === 204 ? null : await res.json(); } catch {}
   syncClock(res, data);
   if (!res.ok) {
-    if (res.status === 401 && token) { setToken(null); onUnauthorized?.(); } // RF02: sessão expirou
+    // RF02: sessão expirou. Só vale se o token recusado ainda é o atual (não o de um logout/login no meio).
+    if (res.status === 401 && auth && token && token === getToken()) { setToken(null); onUnauthorized?.(); }
     throw new ApiError(res.status, data);
   }
   return data;
@@ -64,18 +73,18 @@ export function wsUrl(path, params) {
 }
 
 export const api = {
-  register: (b) => request("/auth/register", { method: "POST", body: b }),
-  login: (b) => request("/auth/login", { method: "POST", body: b }),
-  logout: () => request("/auth/logout", { method: "POST" }),
+  register: (b) => request("/auth/register", { method: "POST", body: b, auth: false }),
+  login: (b) => request("/auth/login", { method: "POST", body: b, auth: false }),
+  logout: (token) => request("/auth/logout", { method: "POST", auth: false, token }),
   me: () => request("/auth/me"),
   categories: () => request("/categories"),
   auctions: (params) => request(`/auctions?${qs(params)}`),
-  auction: (id) => request(`/auctions/${id}`),
+  auction: (id) => request(`/auctions/${encodeURIComponent(id)}`),
   createAuction: (b) => request("/auctions", { method: "POST", body: b }),
-  cancelAuction: (id) => request(`/auctions/${id}/cancel`, { method: "POST" }),
-  room: (id) => request(`/auctions/${id}/room`),
+  cancelAuction: (id) => request(`/auctions/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  room: (id) => request(`/auctions/${encodeURIComponent(id)}/room`),
   // RF12: a chave identifica a tentativa; reenviar a mesma chave devolve o resultado original.
-  bid: (id, amount, key) => request(`/auctions/${id}/bids`, { method: "POST", body: { amount }, headers: { "Idempotency-Key": key } }),
+  bid: (id, amount, key) => request(`/auctions/${encodeURIComponent(id)}/bids`, { method: "POST", body: { amount }, headers: { "Idempotency-Key": key } }),
   myAuctions: () => request("/me/auctions"),
   myParticipations: () => request("/me/participations"),
   presign: (b) => request("/uploads/presign", { method: "POST", body: b }),

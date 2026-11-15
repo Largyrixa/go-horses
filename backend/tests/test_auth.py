@@ -98,6 +98,22 @@ async def check_websocket(
                 state.get("auction", {}).get("id"),
                 auction_id,
             )
+
+        # Fluxo novo do front: token na primeira mensagem, não na URL.
+        async with websockets.connect(
+            websocket_url(base_url, auction_id, role="spectator"),
+            open_timeout=5,
+        ) as websocket:
+            await websocket.send(
+                json.dumps({"type": "auth", "token": user.token})
+            )
+            raw = await asyncio.wait_for(websocket.recv(), timeout=5)
+            state = json.loads(raw)
+            checker.equal(
+                "WS autentica pelo primeiro frame",
+                state.get("auction", {}).get("id"),
+                auction_id,
+            )
     except Exception as exc:  # noqa: BLE001 - falha do teste deve ser reportada
         checker.ok("WebSocket", False, repr(exc))
 

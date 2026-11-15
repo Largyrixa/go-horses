@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useRedirectIfLogged } from "@/lib/auth";
 import Button from "@/components/Button";
 import { ErrorNote, Field, PageTitle } from "@/components/ui";
 
@@ -12,18 +12,35 @@ export default function Cadastro() {
   const [f, setF] = useState({ display_name: "", email: "", password: "" });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const created = useRef(null); // e-mail da conta já criada nesta tela
+  useRedirectIfLogged("/");
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
+    const display_name = f.display_name.trim().replace(/\s+/g, " ");
+    const email = f.email.trim();
+    if (!display_name) return setError("Informe um nome de exibição.");
     if (f.password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
     setBusy(true); setError(null);
     try {
-      await register({ ...f, display_name: f.display_name.trim(), email: f.email.trim() });
-      await login(f.email.trim(), f.password);
-      navigate("/");
+      // Se a conta foi criada mas o login falhou (rede), tentar de novo só refaz o login;
+      // antes a segunda tentativa batia em "já existe uma conta com esse e-mail".
+      if (created.current !== email) {
+        await register({ display_name, email, password: f.password });
+        created.current = email;
+      }
+      try {
+        await login(email, f.password);
+      } catch (err) {
+        if (err.status === 401) created.current = null;
+        throw Object.assign(err, { afterRegister: true });
+      }
+      navigate("/", { replace: true });
     } catch (err) {
-      setError(err.status === 409 ? "Já existe uma conta com esse e-mail. Entre ou use outro e-mail." : err.message);
+      if (err.afterRegister) setError(`Conta criada, mas não foi possível entrar agora. ${err.message}`);
+      else setError(err.status === 409 ? "Já existe uma conta com esse e-mail. Entre ou use outro e-mail." : err.message);
       setBusy(false);
     }
   }

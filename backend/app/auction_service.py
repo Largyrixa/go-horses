@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import timedelta
 from typing import Any, Awaitable, Callable
 
@@ -13,12 +14,25 @@ from .config import (
     CATEGORIES,
     ENFORCE_CREDIT,
     EXTENSION_WINDOW_SECONDS,
+    MAX_DURATION_SECONDS,
     MAX_EXTENSION_SECONDS,
+    MAX_PAGE,
+    MAX_PHOTOS,
+    MAX_PRICE_CENTS,
+    MAX_SEARCH_LENGTH,
+    MAX_START_AHEAD_SECONDS,
+    MIN_DURATION_SECONDS,
+    MIN_PHOTOS,
     PAGE_SIZE,
+    PUBLIC_BASE_URL,
     RECENT_BIDS,
+    START_TOLERANCE_SECONDS,
+    STATIC_DIR,
+    UPLOAD_DIR,
 )
 from .errors import ApiError
 from .serializers import (
+    asset_path,
     auction_dict,
     ensure_utc,
     min_bid_cents,
@@ -38,6 +52,40 @@ AUCTION_INCLUDE = {
 
 FINAL_STATUSES = {AuctionStatus.sold, AuctionStatus.unsold, AuctionStatus.cancelled}
 ALL_STATUSES = {status.value for status in AuctionStatus}
+
+# Fotos aceitas num leilão: só arquivos do próprio storage. URL externa
+# permitiria rastrear quem abre o anúncio e apontar para conteúdo arbitrário.
+_UPLOAD_PHOTO = re.compile(r"^/uploads/([0-9a-f]{32}\.(?:jpg|png|webp))$")
+_STATIC_PHOTO = re.compile(
+    r"^/static/((?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.(?:svg|png|jpg|jpeg|webp))$"
+)
+
+
+def _escape_like(term: str) -> str:
+    """Escapa os curingas do LIKE: `%`, `_` e a barra invertida são texto comum."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _normalize_photo(raw: str) -> str:
+    """Valida uma foto e devolve o caminho relativo guardado no banco."""
+    photo = str(raw).strip()
+    if PUBLIC_BASE_URL and photo.startswith(PUBLIC_BASE_URL + "/"):
+        photo = asset_path(photo)
+    upload = _UPLOAD_PHOTO.fullmatch(photo)
+    if upload:
+        if not (UPLOAD_DIR / upload.group(1)).is_file():
+            raise ApiError(
+                422, "invalid_photos", "Uma das fotos não foi enviada. Envie de novo."
+            )
+        return photo
+    static = _STATIC_PHOTO.fullmatch(photo)
+    if static and (STATIC_DIR / static.group(1)).is_file():
+        return photo
+    raise ApiError(
+        422,
+        "invalid_photos",
+        "As fotos precisam ser enviadas pelo próprio site (JPG, PNG ou WebP).",
+    )
 
 
 async def sync_auctions(
@@ -66,24 +114,28 @@ async def sync_auctions(
         where={"status": AuctionStatus.running, "ends_at": {"lte": now}}
     )
     for auction in closing:
-        sold = auction.bid_count > 0
-        # UPDATE condicional atômico: grava status, vencedor e preço final numa
-        # única operação. Se um lance prorrogou ends_at no meio do caminho, a
+        # UPDATE condicional atômico: status, vencedor e preço final saem das
+        # colunas da PRÓPRIA linha no instante do UPDATE, não da leitura feita
+        # acima. Assim um lance aceito entre a leitura e o fechamento não é
+        # perdido (vencedor/preço antigos). Se o lance prorrogou ends_at, a
         # condição `ends_at <= now` não casa e nada é fechado.
         updated = await db.execute_raw(
             """
             UPDATE "auctions"
-               SET status = $1::"AuctionStatus",
-                   final_price_cents = $2::int,
-                   winner_id = $3,
-                   closed_at = $4::timestamptz
-             WHERE id = $5
-               AND status = $6::"AuctionStatus"
-               AND ends_at <= $7::timestamptz
+               SET status = CASE WHEN bid_count > 0
+                                 THEN $1::"AuctionStatus"
+                                 ELSE $2::"AuctionStatus" END,
+                   final_price_cents = CASE WHEN bid_count > 0
+                                            THEN current_price_cents END,
+                   winner_id = CASE WHEN bid_count > 0 THEN leader_id END,
+                   closed_at = $3::timestamptz,
+                   updated_at = $3::timestamptz
+             WHERE id = $4
+               AND status = $5::"AuctionStatus"
+               AND ends_at <= $6::timestamptz
             """,
-            AuctionStatus.sold if sold else AuctionStatus.unsold,
-            auction.current_price_cents if sold else None,
-            auction.leader_id if sold else None,
+            AuctionStatus.sold,
+            AuctionStatus.unsold,
             now,
             auction.id,
             AuctionStatus.running,
@@ -118,15 +170,15 @@ async def list_auctions(
     page: int = 1,
 ) -> dict[str, Any]:
     await sync_auctions(db)
-    page = max(1, page)
+    page = min(max(1, page), MAX_PAGE)
     where: dict[str, Any] = {}
-    q = q.strip()
+    q = q.strip()[:MAX_SEARCH_LENGTH]
     category = category.strip()
     status = status.strip().lower()
 
     if q:
         where["item"] = {
-            "is": {"name": {"contains": q, "mode": "insensitive"}}
+            "is": {"name": {"contains": _escape_like(q), "mode": "insensitive"}}
         }
     if category:
         where["item"] = {
@@ -141,7 +193,7 @@ async def list_auctions(
             raise ApiError(
                 422,
                 "invalid_status",
-                f"Estado inválido: {status}.",
+                "Estado inválido.",
             )
         where["status"] = AuctionStatus(status)
     else:
@@ -151,11 +203,13 @@ async def list_auctions(
             {"status": AuctionStatus.running},
         ]
 
+    # O `id` no fim desempata registros com a mesma data: sem ele a paginação
+    # podia repetir ou pular leilões entre uma página e outra.
     order: list[dict[str, str]]
     if status in {"sold", "unsold", "cancelled"}:
-        order = [{"updated_at": "desc"}]
+        order = [{"updated_at": "desc"}, {"id": "asc"}]
     else:
-        order = [{"ends_at": "asc"}, {"created_at": "desc"}]
+        order = [{"ends_at": "asc"}, {"created_at": "desc"}, {"id": "asc"}]
 
     rows = await db.auction.find_many(
         where=where,
@@ -176,10 +230,9 @@ async def list_auctions(
 async def create_auction(
     db: Prisma, user: models.User, payload: Any
 ) -> dict[str, Any]:
-    name = payload.name.strip()
+    name = " ".join(payload.name.split())
     description = payload.description.strip()
     category = payload.category.strip()
-    photos = [str(photo).strip() for photo in payload.photos]
 
     if not name or not description:
         raise ApiError(422, "invalid_auction", "Nome e descrição são obrigatórios.")
@@ -189,23 +242,28 @@ async def create_auction(
             "invalid_category",
             f"Categoria inválida. Use uma destas: {', '.join(CATEGORIES)}.",
         )
-    if not (3 <= len(photos) <= 10):
-        raise ApiError(422, "invalid_photos", "Envie entre 3 e 10 fotos.")
-    for photo in photos:
-        if not photo or len(photo) > 2048:
-            raise ApiError(422, "invalid_photos", "URL de foto inválida.")
-        if not photo.startswith(("http://", "https://", "/uploads/", "/static/")):
-            raise ApiError(
-                422, "invalid_photos", "As fotos precisam ser URLs válidas."
-            )
+    # Sem repetição: a mesma foto duas vezes não conta para o mínimo.
+    photos = list(dict.fromkeys(_normalize_photo(photo) for photo in payload.photos))
+    if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
+        raise ApiError(
+            422,
+            "invalid_photos",
+            f"Envie entre {MIN_PHOTOS} e {MAX_PHOTOS} fotos diferentes.",
+        )
+    if not (0 < payload.starting_price <= MAX_PRICE_CENTS):
+        raise ApiError(422, "invalid_price", "Preço inicial inválido.")
+    if not (MIN_DURATION_SECONDS <= payload.duration_seconds <= MAX_DURATION_SECONDS):
+        raise ApiError(
+            422, "invalid_duration", "A duração deve ficar entre 1 minuto e 7 dias."
+        )
 
     now = utcnow()
     starts_at = ensure_utc(payload.starts_at)
-    if starts_at < now - timedelta(seconds=120):
+    if starts_at < now - timedelta(seconds=START_TOLERANCE_SECONDS):
         raise ApiError(
             422, "invalid_start", "O início não pode estar no passado."
         )
-    if starts_at > now + timedelta(days=30):
+    if starts_at > now + timedelta(seconds=MAX_START_AHEAD_SECONDS):
         raise ApiError(
             422,
             "invalid_start",
@@ -367,7 +425,6 @@ async def place_bid(
     Retorna (bid, auction, replay). O lock `FOR UPDATE` serializa lances
     simultâneos do mesmo leilão no Postgres.
     """
-    now = utcnow()
     bid_id: str | None = None
     replay = False
 
@@ -377,6 +434,10 @@ async def place_bid(
         )
         if not locked:
             raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+        # O relógio é lido DEPOIS de obter o lock. Antes era lido na entrada:
+        # um lance que esperasse na fila usava um horário velho e podia ser
+        # aceito após o fim do leilão (e errar o intervalo e a prorrogação).
+        now = utcnow()
 
         auction = await tx.auction.find_unique(
             where={"id": auction_id}, include=AUCTION_INCLUDE
@@ -394,6 +455,15 @@ async def place_bid(
             include={"bidder": True},
         )
         if existing is not None:
+            # A chave só repete o resultado para quem a criou e com o mesmo
+            # valor; senão um usuário receberia o lance de outro como se
+            # fosse a confirmação do seu.
+            if existing.bidder_id != user.id or existing.amount_cents != amount:
+                raise ApiError(
+                    409,
+                    "idempotency_key_reused",
+                    "Esta chave de idempotência já foi usada em outro lance.",
+                )
             bid_id = existing.id
             replay = True
         else:
@@ -464,7 +534,7 @@ async def place_bid(
                 raise ApiError(
                     409,
                     "bid_too_low",
-                    f"O lance mínimo agora é {minimum} centavos.",
+                    "Seu lance ficou abaixo do mínimo.",
                     min_bid=minimum,
                 )
 

@@ -81,21 +81,34 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 1. Middleware para liberar o bloqueio de Private Network Access (PNA) do Chrome
+# Cabeçalhos de segurança em toda resposta da API e das fotos. `nosniff`
+# impede o navegador de "adivinhar" o tipo de um upload; o CSP restritivo só
+# vale para o que o backend serve (JSON e imagens), não para o front.
 @app.middleware("http")
-async def add_private_network_header(request: Request, call_next):
+async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    path = request.url.path
+    if path.startswith(("/uploads/", "/static/")):
+        response.headers.setdefault(
+            "Content-Security-Policy", "default-src 'none'; sandbox"
+        )
+    elif path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
     return response
 
-# 2. CORS compatível com Chrome (allow_origin_regex permite credenciais de qualquer origem)
+
+# CORS só para as origens listadas em CORS_ORIGINS. O front usa a mesma origem
+# da API (proxy do Vite em dev, Caddy em produção), então em uso normal o CORS
+# nem entra em jogo; refletir qualquer origem com credenciais é inseguro.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS if CORS_ORIGINS != ["*"] else [],
-    allow_origin_regex=".*",
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     expose_headers=["Date"],
 )
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, getToken, wsUrl } from "@/lib/api";
 
 // Sala em tempo real (RF09) com reconexão automática e ressincronização (RF24).
@@ -18,19 +18,36 @@ export function useRoom(id, role) {
     if (m.participants != null) setCounts({ participants: m.participants, spectators: m.spectators ?? 0 });
   }, []);
 
+  const shownId = useRef(id);
   useEffect(() => {
     if (!id) return;
+    // Troca de leilão (não de papel): não mostra o estado do anterior enquanto o novo carrega.
+    if (shownId.current !== id) {
+      shownId.current = id;
+      setAuction(null); setBids([]); setCounts({ participants: 0, spectators: 0 }); setError(null);
+    }
     let closed = false, ws, retry = 0, timer;
     const sync = () =>
       api.room(id).then((r) => { if (!closed) { apply(r); setError(null); } }).catch((e) => { if (!closed) setError(e); });
     const connect = () => {
-      ws = new WebSocket(wsUrl(`/auctions/${id}/ws`, { token: getToken(), role }));
-      ws.onopen = () => { retry = 0; setConnected(true); sync(); };
-      ws.onmessage = (ev) => { try { apply(JSON.parse(ev.data)); } catch {} };
-      ws.onerror = () => ws.close();
-      ws.onclose = () => {
+      const socket = new WebSocket(wsUrl(`/auctions/${encodeURIComponent(id)}/ws`, { role }));
+      ws = socket;
+      let ready = false;
+      // O token vai na primeira mensagem, não na URL (URLs ficam em logs de acesso).
+      socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token: getToken() }));
+      socket.onmessage = (ev) => {
+        // Só a primeira mensagem do servidor confirma a entrada na sala: o servidor aceita a
+        // conexão antes de validar o token, então o `onopen` sozinho não prova nada.
+        if (!ready) { ready = true; retry = 0; setConnected(true); sync(); }
+        try { apply(JSON.parse(ev.data)); } catch {}
+      };
+      socket.onerror = () => socket.close();
+      socket.onclose = (ev) => {
+        if (closed || ws !== socket) return;
         setConnected(false);
-        if (closed) return;
+        // 4401 = sessão inválida, 4404 = leilão inexistente: reconectar não resolve. O `sync`
+        // mostra o erro certo (e, no 401, encerra a sessão). Antes isso virava um laço infinito.
+        if (ev.code === 4401 || ev.code === 4404) { sync(); return; }
         retry += 1;
         timer = setTimeout(connect, Math.min(1000 * 2 ** retry, 8000));
       };

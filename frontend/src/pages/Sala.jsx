@@ -7,19 +7,19 @@ import { useRoom } from "@/lib/useRoom";
 import Button from "@/components/Button";
 import Countdown from "@/components/Countdown";
 import { ErrorNote, StatusBadge } from "@/components/ui";
-import { brl, centsToInput, fmtDateTime, fmtTime, maskName, newKey, parseCents } from "@/utils/format";
+import { brl, centsToInput, fmtDateTime, fmtTime, maskName, newKey, parseCents, plural } from "@/utils/format";
 import { toast } from "@/utils/alerts";
 
 export default function Sala() {
   const { id } = useParams();
   const { user, loading } = useRequireAuth();            // RF04: sala exige login
   const [wantRole, setWantRole] = useState("participant");
-  const [roleLocked, setRoleLocked] = useState(false);
-  const role = roleLocked ? "spectator" : wantRole;       // comitente só assiste (RF04/RF25)
-  const { auction: a, bids, counts, connected, error, push } = useRoom(user ? id : null, role);
+  // O servidor já força o comitente a espectador (RF04/RF25). A conexão usa só o papel pedido:
+  // trocar o papel depois de carregar o leilão derrubava e reabria o WebSocket do comitente.
+  const { auction: a, bids, counts, connected, error, push } = useRoom(user ? id : null, wantRole);
 
   const isSeller = !!(a && user && a.seller?.id === user.id);
-  useEffect(() => { setRoleLocked(isSeller); }, [isSeller]);
+  const role = isSeller ? "spectator" : wantRole;
 
   // RF26: aviso na hora em que o usuário deixa de ser o líder.
   const wasLeader = useRef(false);
@@ -38,10 +38,12 @@ export default function Sala() {
   const attempt = useRef(null);                           // { key, cents } — RF12
 
   useEffect(() => { if (a && !touched) setAmount(centsToInput(a.min_bid)); }, [a?.min_bid, touched]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Outro leilão na mesma tela: zera o formulário e a tentativa pendente do anterior.
+  useEffect(() => { attempt.current = null; wasLeader.current = false; setTouched(false); setMsg(null); }, [id]);
 
   async function bid(cents) {
     if (busy) return;                                     // clique duplo não gera segundo envio
-    if (cents == null) return setMsg({ err: true, text: "Digite um valor válido, por exemplo 150,00." });
+    if (cents == null || cents <= 0) return setMsg({ err: true, text: "Digite um valor válido, por exemplo 150,00." });
     setBusy(true); setMsg(null);
     if (!attempt.current || attempt.current.cents !== cents) attempt.current = { key: newKey(), cents };
     try {
@@ -98,13 +100,13 @@ export default function Sala() {
           <div>
             <p className="text-sm text-gray">{running ? "Tempo restante" : "Término"}</p>
             <p className="font-mono text-4xl">{running ? <Countdown auction={a} /> : fmtDateTime(a.ends_at)}</p>
-            <p className="mt-2 text-sm text-gray">{a.bid_count ?? 0} {a.bid_count === 1 ? "lance" : "lances"}</p>
+            <p className="mt-2 text-sm text-gray">{plural(a.bid_count, "lance", "lances")}</p>
           </div>
         </div>
 
         {a.status === "sold" && (
           <p className="rounded-md border border-primary bg-primary/10 px-4 py-4 text-lg" role="status">
-            Vendido por <strong>{brl(a.final_price ?? price)}</strong> para <strong>{iWon ? "você" : maskName(a.winner?.display_name)}</strong>.
+            Vendido por <strong>{brl(a.final_price ?? price)}</strong>{(iWon || a.winner) && <> para <strong>{iWon ? "você" : maskName(a.winner?.display_name)}</strong></>}.
           </p>
         )}
         {a.status === "unsold" && <p className="rounded-md border border-edge px-4 py-4 text-lg text-gray" role="status">Encerrado sem lances.</p>}
@@ -139,8 +141,8 @@ export default function Sala() {
 
       <aside aria-label="Últimos lances" className="flex flex-col gap-4">
         <p className="flex items-center gap-4 text-sm text-gray">
-          <span className="flex items-center gap-1.5"><Users size={16} aria-hidden="true" /> {counts.participants} participantes</span>
-          <span className="flex items-center gap-1.5"><Eye size={16} aria-hidden="true" /> {counts.spectators} espectadores</span>
+          <span className="flex items-center gap-1.5"><Users size={16} aria-hidden="true" /> {plural(counts.participants, "participante", "participantes")}</span>
+          <span className="flex items-center gap-1.5"><Eye size={16} aria-hidden="true" /> {plural(counts.spectators, "espectador", "espectadores")}</span>
         </p>
         <div className="panel">
           <h2 className="mb-3 text-lg font-bold text-white">Últimos lances</h2>
