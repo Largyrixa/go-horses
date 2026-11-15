@@ -12,7 +12,9 @@ from ..auction_service import (
     get_auction,
     list_auctions,
     place_bid,
+    relist_auction,
     room_payload,
+    update_auction,
 )
 from ..config import (
     CATEGORIES,
@@ -26,7 +28,7 @@ from ..db import db
 from ..deps import get_current_user
 from ..errors import ApiError
 from ..realtime import Client, rooms
-from ..schemas import AuctionCreateIn, BidIn
+from ..schemas import AuctionCreateIn, AuctionUpdateIn, BidIn
 from ..security import hash_session_token
 from ..serializers import (
     auction_dict,
@@ -71,6 +73,26 @@ async def create(payload: AuctionCreateIn, user=Depends(get_current_user)):
     return created
 
 
+@router.patch("/auctions/{auction_id}")
+async def update(
+    auction_id: str,
+    payload: AuctionUpdateIn,
+    user=Depends(get_current_user),
+):
+    updated = await update_auction(db, user, auction_id, payload)
+    await rooms.broadcast_state(auction_id)
+    return updated
+
+
+@router.post("/auctions/{auction_id}/relist", status_code=201)
+async def relist(
+    auction_id: str,
+    payload: AuctionCreateIn,
+    user=Depends(get_current_user),
+):
+    return await relist_auction(db, user, auction_id, payload)
+
+
 @router.post("/auctions/{auction_id}/cancel")
 async def cancel(auction_id: str, user=Depends(get_current_user)):
     result = await cancel_auction(db, user, auction_id)
@@ -109,6 +131,8 @@ async def bid(
         auction_id,
         payload.amount,
         idempotency_key.strip(),
+        # RF10: exige uma conexão WebSocket aberta como participante nesta sala.
+        in_room=lambda: rooms.has_participant(auction_id, user.id),
     )
     await rooms.broadcast_state(auction_id)
     return {

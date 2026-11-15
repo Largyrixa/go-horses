@@ -27,9 +27,10 @@ cd backend
 ```
 
 O `run_all.py` faz um preflight em `/api/health`, executa os testes de
-autenticação, SQL injection e corridas, e depois um benchmark rápido. Retorna
-`0` somente se todos passarem. O teste de carga (`load_test.py`) **não** roda
-no `run_all.py`; ele é executado separadamente com `make load` ou diretamente.
+autenticação, SQL injection, corridas e funcionalidades novas, e depois um
+benchmark rápido. Retorna `0` somente se todos passarem. O teste de carga
+(`load_test.py`) **não** roda no `run_all.py`; ele é executado separadamente
+com `make load` ou diretamente.
 
 ## Executar cada parte
 
@@ -45,6 +46,9 @@ cd backend
 # Corridas de lances, idempotência concorrente e cancelamento x lance
 .venv/bin/python tests/test_race_auction.py
 
+# RF23 (edição), RF28 (relistagem), RF22 (perfil/busca) e RF10 (presença na sala)
+.venv/bin/python tests/test_features.py
+
 # Benchmark de latência/throughput (somente leitura por padrão)
 .venv/bin/python tests/benchmark.py
 ```
@@ -54,6 +58,7 @@ Atalhos no Makefile:
 ```bash
 make test-security   # auth + SQL injection
 make test-race       # corridas de leilão
+make test-features   # RF23/RF28/RF22/RF10
 make bench           # benchmark
 ```
 
@@ -134,6 +139,21 @@ Opções úteis:
 recebe `has_bids`. O teste `test_race_auction.py` cobre os dois desfechos (a
 corrida concorrente e o caminho determinístico cancelar-depois-lançar) e deve
 passar com 0 falhas.
+
+Os testes abrem conexões WebSocket de participante porque o backend exige
+presença na sala para aceitar lances (RF10).
+
+### `test_features.py`
+
+- RF23: comitente altera a duração de leilão agendado e anexa fotos; duração
+  travada em leilão aberto; non-seller recebe `403`; URL de foto externa é
+  recusada.
+- RF28: relistagem de leilão cancelado/sem lances; non-seller recebe `403`;
+  leilão ativo e item com leilão ativo são recusados com `409`.
+- RF22: busca pública de comitentes e perfil público, sem e-mail e com nomes
+  mascarados.
+- RF10: lance sem WebSocket de participante recebe `409 not_in_room`; com a
+  sala aberta, o lance é aceito.
 
 ### `benchmark.py`
 
@@ -223,6 +243,7 @@ backend/tests/
 ├── test_auth.py           # autenticação e autorização
 ├── test_sql_injection.py  # injeção SQL
 ├── test_race_auction.py   # concorrência de lances/cancelamento
+├── test_features.py       # RF23/RF28/RF22/RF10
 ├── benchmark.py           # benchmark HTTP
 ├── load_test.py           # teste de carga/capacidade (HTTP + WebSocket)
 ├── run_all.py             # orquestrador da suíte

@@ -24,7 +24,12 @@ from common import build_parser, ensure_api, make_client
 
 TEST_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = TEST_DIR.parent
-TEST_SCRIPTS = ("test_auth.py", "test_sql_injection.py", "test_race_auction.py")
+TEST_SCRIPTS = (
+    "test_auth.py",
+    "test_sql_injection.py",
+    "test_race_auction.py",
+    "test_features.py",
+)
 
 
 async def preflight(base_url: str) -> bool:

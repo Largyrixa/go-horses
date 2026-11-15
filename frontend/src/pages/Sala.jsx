@@ -59,7 +59,9 @@ export default function Sala() {
       } else {
         attempt.current = null;
         if (e.minBid) { setAmount(centsToInput(e.minBid)); setTouched(false); }
-        setMsg({ err: true, text: `${e.message}${e.minBid ? ` Lance mínimo agora: ${brl(e.minBid)}.` : ""}` });
+        // A mensagem do backend já traz o valor em R$; só completa quando não traz.
+        const showMin = e.minBid && !e.message.includes("R$");
+        setMsg({ err: true, text: `${e.message}${showMin ? ` Lance mínimo agora: ${brl(e.minBid)}.` : ""}` });
       }
     } finally {
       setBusy(false);
@@ -74,7 +76,7 @@ export default function Sala() {
   const price = a.bid_count > 0 ? a.current_price : a.starting_price;
   const iLead = a.leader?.id === user.id;
   const iWon = a.status === "sold" && a.winner?.id === user.id;
-  const canBid = running && !isSeller && role === "participant";
+  const canBid = running && !isSeller && role === "participant" && connected;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr]">

@@ -227,12 +227,17 @@ async def list_auctions(
     }
 
 
-async def create_auction(
-    db: Prisma, user: models.User, payload: Any
-) -> dict[str, Any]:
+def _clean_photos(photos: list[str]) -> list[str]:
+    """Valida e deduplica fotos do próprio storage (RF05/RF23/RF28)."""
+    return list(dict.fromkeys(_normalize_photo(photo) for photo in photos))
+
+
+def _auction_fields(payload: Any) -> dict[str, Any]:
+    """Valida o payload de criação/relistagem (RF05/RF28)."""
     name = " ".join(payload.name.split())
     description = payload.description.strip()
     category = payload.category.strip()
+    photos = _clean_photos(payload.photos)
 
     if not name or not description:
         raise ApiError(422, "invalid_auction", "Nome e descrição são obrigatórios.")
@@ -242,8 +247,6 @@ async def create_auction(
             "invalid_category",
             f"Categoria inválida. Use uma destas: {', '.join(CATEGORIES)}.",
         )
-    # Sem repetição: a mesma foto duas vezes não conta para o mínimo.
-    photos = list(dict.fromkeys(_normalize_photo(photo) for photo in payload.photos))
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise ApiError(
             422,
@@ -267,21 +270,36 @@ async def create_auction(
         raise ApiError(
             422,
             "invalid_start",
-            "O início deve ser no máximo 30 dias à frente.",
+            f"O início deve ser no máximo {MAX_START_AHEAD_SECONDS // 86400} dias à frente.",
         )
     if starts_at < now:
         starts_at = now
 
-    ends_at = starts_at + timedelta(seconds=payload.duration_seconds)
-    status = AuctionStatus.running if starts_at <= now else AuctionStatus.scheduled
+    return {
+        "name": name,
+        "description": description,
+        "category": category,
+        "photos": photos,
+        "starts_at": starts_at,
+        "ends_at": starts_at + timedelta(seconds=payload.duration_seconds),
+        "status": (
+            AuctionStatus.running if starts_at <= now else AuctionStatus.scheduled
+        ),
+    }
+
+
+async def create_auction(
+    db: Prisma, user: models.User, payload: Any
+) -> dict[str, Any]:
+    fields = _auction_fields(payload)
 
     async with db.tx() as tx:
         item = await tx.item.create(
             data={
-                "name": name,
-                "description": description,
-                "category": category,
-                "photos": photos,
+                "name": fields["name"],
+                "description": fields["description"],
+                "category": fields["category"],
+                "photos": fields["photos"],
                 "seller": {"connect": {"id": user.id}},
             }
         )
@@ -289,17 +307,173 @@ async def create_auction(
             data={
                 "item": {"connect": {"id": item.id}},
                 "seller": {"connect": {"id": user.id}},
-                "status": status,
+                "status": fields["status"],
                 "starting_price_cents": payload.starting_price,
                 "current_price_cents": payload.starting_price,
-                "starts_at": starts_at,
-                "ends_at": ends_at,
-                "original_ends_at": ends_at,
+                "starts_at": fields["starts_at"],
+                "ends_at": fields["ends_at"],
+                "original_ends_at": fields["ends_at"],
             }
         )
 
     created = await get_auction(db, auction.id)
     return auction_dict(created)
+
+
+async def update_auction(
+    db: Prisma, user: models.User, auction_id: str, payload: Any
+) -> dict[str, Any]:
+    """RF23: o comitente altera a duração (antes do início) e acrescenta fotos.
+
+    Nada pode ser removido ou trocado: o payload só carrega fotos novas, que são
+    anexadas ao item. A duração trava quando o leilão abre, para não mover a
+    linha de chegada de quem já está dando lances.
+    """
+    async with db.tx() as tx:
+        locked = await tx.query_raw(
+            'SELECT id FROM "auctions" WHERE id = $1 FOR UPDATE', auction_id
+        )
+        if not locked:
+            raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+
+        auction = await tx.auction.find_unique(
+            where={"id": auction_id}, include=AUCTION_INCLUDE
+        )
+        if auction is None:
+            raise ApiError(404, "auction_not_found", "Leilão não encontrado.")
+        if auction.seller_id != user.id:
+            raise ApiError(
+                403, "not_seller", "Só o comitente pode editar este leilão."
+            )
+
+        status = status_value(auction)
+        if status not in {"scheduled", "running"}:
+            raise ApiError(
+                409,
+                "not_editable",
+                "Este leilão já foi encerrado e não pode ser editado.",
+            )
+
+        changes: dict[str, Any] = {}
+        if payload.duration_seconds is not None:
+            if status != "scheduled":
+                raise ApiError(
+                    409,
+                    "duration_locked",
+                    "A duração só pode ser alterada antes do início.",
+                )
+            starts_at = ensure_utc(auction.starts_at)
+            ends_at = starts_at + timedelta(seconds=payload.duration_seconds)
+            changes.update(
+                {
+                    "ends_at": ends_at,
+                    "original_ends_at": ends_at,
+                    "extension_seconds": 0,
+                }
+            )
+
+        added: list[str] = []
+        if payload.photos:
+            # Trava o item antes de ler as fotos: duas edições concorrentes não
+            # podem sobrescrever o acréscimo uma da outra.
+            await tx.query_raw(
+                'SELECT id FROM "items" WHERE id = $1 FOR UPDATE', auction.item_id
+            )
+            item = await tx.item.find_unique(where={"id": auction.item_id})
+            existing = list((item.photos if item else auction.item.photos) or [])
+            for photo in _clean_photos(payload.photos):
+                if photo not in existing and photo not in added:
+                    added.append(photo)
+            if len(existing) + len(added) > MAX_PHOTOS:
+                raise ApiError(
+                    422,
+                    "too_many_photos",
+                    f"O leilão já tem {len(existing)} fotos; o máximo é {MAX_PHOTOS}.",
+                )
+            if added:
+                await tx.item.update(
+                    where={"id": auction.item_id},
+                    data={"photos": existing + added},
+                )
+
+        if not changes and not added:
+            raise ApiError(
+                422,
+                "nothing_to_update",
+                "Envie uma nova duração ou pelo menos uma foto nova.",
+            )
+
+        if changes:
+            await tx.auction.update(where={"id": auction_id}, data=changes)
+
+    return auction_dict(await get_auction(db, auction_id))
+
+
+async def relist_auction(
+    db: Prisma, user: models.User, auction_id: str, payload: Any
+) -> dict[str, Any]:
+    """RF28: relista um item de leilão encerrado sem lances ou cancelado.
+
+    Cria um novo leilão para o MESMO item, com todos os campos editáveis. Um
+    item nunca fica com dois leilões agendados/em andamento ao mesmo tempo.
+    """
+    source = await get_auction(db, auction_id)
+    if source.seller_id != user.id:
+        raise ApiError(
+            403, "not_seller", "Só o comitente pode relistar este leilão."
+        )
+    if status_value(source) not in {"unsold", "cancelled"}:
+        raise ApiError(
+            409,
+            "not_relistable",
+            "Só leilões encerrados sem lances ou cancelados podem ser relistados.",
+        )
+
+    fields = _auction_fields(payload)
+
+    async with db.tx() as tx:
+        # Serializa relistagens concorrentes do mesmo item.
+        await tx.query_raw(
+            'SELECT id FROM "items" WHERE id = $1 FOR UPDATE', source.item_id
+        )
+        active = await tx.auction.find_first(
+            where={
+                "item_id": source.item_id,
+                "status": {
+                    "in": [AuctionStatus.scheduled, AuctionStatus.running]
+                },
+            }
+        )
+        if active is not None:
+            raise ApiError(
+                409,
+                "item_has_active_auction",
+                "Este item já tem um leilão agendado ou em andamento.",
+            )
+
+        await tx.item.update(
+            where={"id": source.item_id},
+            data={
+                "name": fields["name"],
+                "description": fields["description"],
+                "category": fields["category"],
+                "photos": fields["photos"],
+            },
+        )
+        created = await tx.auction.create(
+            data={
+                "item": {"connect": {"id": source.item_id}},
+                "seller": {"connect": {"id": user.id}},
+                "status": fields["status"],
+                "starting_price_cents": payload.starting_price,
+                "current_price_cents": payload.starting_price,
+                "starts_at": fields["starts_at"],
+                "ends_at": fields["ends_at"],
+                "original_ends_at": fields["ends_at"],
+            }
+        )
+
+    return auction_dict(await get_auction(db, created.id))
 
 
 async def cancel_auction(
@@ -419,6 +593,7 @@ async def place_bid(
     auction_id: str,
     amount: int,
     idempotency_key: str,
+    in_room: Callable[[], bool] | None = None,
 ) -> tuple[models.Bid, models.Auction, bool]:
     """Grava um lance com lock de linha (RF10-RF14).
 
@@ -501,6 +676,17 @@ async def place_bid(
                     "seller_cannot_bid",
                     "O comitente não pode dar lance no próprio leilão.",
                 )
+
+            # RF10: o autor precisa estar na sala (WS aberto) neste instante.
+            # Fica depois do replay para que um reenvio idempotente continue
+            # devolvendo o resultado original mesmo se o socket tiver caído.
+            if in_room is not None and not in_room():
+                raise ApiError(
+                    409,
+                    "not_in_room",
+                    "Entre na sala como participante para dar lance.",
+                )
+
             if auction.leader_id == user.id:
                 raise ApiError(
                     409,

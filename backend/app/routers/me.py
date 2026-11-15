@@ -1,7 +1,7 @@
 """Área do usuário: meus leilões, participações e perfil público."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from prisma.enums import AuctionStatus
 
 from ..auction_service import AUCTION_INCLUDE, sync_auctions
@@ -62,6 +62,23 @@ async def my_participations(user=Depends(get_current_user)):
             }
         )
     return {"items": items}
+
+
+@router.get("/users")
+async def search_users(q: str = Query(default="", max_length=60)):
+    """RF22: busca pública de comitentes pelo nome de exibição."""
+    term = q.strip()
+    if len(term) < 2:
+        return {"items": [], "query": term}
+    rows = await db.user.find_many(
+        where={"display_name": {"contains": term, "mode": "insensitive"}},
+        order={"display_name": "asc"},
+        take=20,
+    )
+    return {
+        "items": [user_dict(user, include_email=False) for user in rows],
+        "query": term,
+    }
 
 
 @router.get("/users/{user_id}")

@@ -6,6 +6,9 @@ Dependência: httpx (já presente em backend/requirements.txt).
 from __future__ import annotations
 
 import argparse
+import asyncio
+import contextlib
+import json
 import os
 import sys
 import uuid
@@ -316,6 +319,75 @@ def websocket_url(
     if token:
         params["token"] = token
     return f"{base}/api/auctions/{quote(auction_id, safe='')}/ws?{urlencode(params)}"
+
+
+@dataclass
+class RoomConnection:
+    """Conexão WebSocket de teste que consome as mensagens em background."""
+
+    websocket: Any
+    reader: asyncio.Task | None = None
+
+    async def __aenter__(self) -> "RoomConnection":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()
+
+    async def close(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.websocket.close()
+        if self.reader is not None:
+            self.reader.cancel()
+            with contextlib.suppress(BaseException):
+                await self.reader
+
+
+async def join_room(
+    base_url: str,
+    auction_id: str,
+    user: TestUser,
+    *,
+    role: str = "participant",
+    timeout: float = 10.0,
+) -> RoomConnection:
+    """Abre um WebSocket autenticado e espera o primeiro estado da sala.
+
+    O backend exige presença na sala como participante para aceitar lances
+    (RF10). O leitor em background evita backpressure durante os broadcasts.
+    """
+    import websockets
+
+    url = websocket_url(base_url, auction_id, token=user.token, role=role)
+    websocket = await websockets.connect(
+        url,
+        open_timeout=timeout,
+        close_timeout=timeout,
+    )
+    try:
+        while True:
+            raw = await asyncio.wait_for(websocket.recv(), timeout=timeout)
+            try:
+                message = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(message, dict) and "auction" in message:
+                break
+    except Exception:
+        await websocket.close()
+        raise
+
+    async def drain() -> None:
+        try:
+            async for _ in websocket:
+                pass
+        except Exception:
+            pass
+
+    return RoomConnection(
+        websocket=websocket,
+        reader=asyncio.create_task(drain()),
+    )
 
 
 def percentile(values: Sequence[float], percent: float) -> float:

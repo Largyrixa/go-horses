@@ -25,6 +25,7 @@ from common import (
     create_auction,
     ensure_api,
     error_code,
+    join_room,
     make_client,
     place_bid,
     preview,
@@ -227,6 +228,7 @@ async def run_idempotency_round(
 
 async def run_cancel_race_round(
     checker: Checker,
+    base_url: str,
     client,
     seller,
     bidder,
@@ -243,6 +245,7 @@ async def run_cancel_race_round(
     auction_id = auction["id"]
     amount = auction["min_bid"]
     key = f"cancel-race-{index}-{uuid.uuid4().hex[:8]}"
+    room = await join_room(base_url, auction_id, bidder)
 
     cancel_coro = client.post(
         f"/api/auctions/{auction_id}/cancel",
@@ -261,6 +264,7 @@ async def run_cancel_race_round(
             False,
             repr(exceptions[0]),
         )
+        await room.close()
         return
 
     cancel_response, bid_response = results
@@ -322,10 +326,12 @@ async def run_cancel_race_round(
             cleanup.status_code,
             200,
         )
+    await room.close()
 
 
 async def run_cancel_first_check(
     checker: Checker,
+    base_url: str,
     client,
     seller,
     bidder,
@@ -341,6 +347,7 @@ async def run_cancel_first_check(
         starting_price=10_000,
     )
     auction_id = auction["id"]
+    room = await join_room(base_url, auction_id, bidder)
 
     response = await client.post(
         f"/api/auctions/{auction_id}/cancel",
@@ -365,6 +372,7 @@ async def run_cancel_first_check(
     detail = await auction_detail(client, auction_id)
     checker.equal("Leilão cancelado não registra lance", detail["bid_count"], 0)
     checker.equal("Status continua cancelled", detail["status"], "cancelled")
+    await room.close()
 
 
 async def main() -> int:
@@ -413,6 +421,10 @@ async def main() -> int:
         auction_id = auction["id"]
         detail = await auction_detail(client, auction_id)
         accepted_ids: set[str] = set()
+        main_rooms = [
+            await join_room(args.base_url, auction_id, bidder)
+            for bidder in bidders
+        ]
 
         first_amount = detail["min_bid"]
         first_body, detail = await run_bid_round(
@@ -455,13 +467,16 @@ async def main() -> int:
             bidder = bidders[(index - 1) % len(bidders)]
             await run_cancel_race_round(
                 checker,
+                args.base_url,
                 client,
                 seller,
                 bidder,
                 index,
             )
 
-        await run_cancel_first_check(checker, client, seller, bidders[0])
+        await run_cancel_first_check(
+            checker, args.base_url, client, seller, bidders[0]
+        )
 
         detail = await auction_detail(client, auction_id)
         checker.equal(
@@ -487,6 +502,11 @@ async def main() -> int:
                 len(response.json().get("recent_bids", [])),
                 3,
             )
+
+        await asyncio.gather(
+            *(room.close() for room in main_rooms),
+            return_exceptions=True,
+        )
 
     return checker.finish()
 

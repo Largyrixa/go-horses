@@ -44,6 +44,9 @@ Com Docker (mais simples):
 docker compose up -d db
 ```
 
+Ou `make db`, que reaproveita um Postgres que já esteja respondendo em
+`127.0.0.1:5432` e só chama o Docker se a porta estiver livre.
+
 Sem Docker, crie um banco/usuário no Postgres local:
 
 ```sql
@@ -152,7 +155,8 @@ make reset
    ou **Encerrado sem lances**. Reinicie a API no meio de um leilão para ver a
    recuperação automática (RF18).
 
-Exemplo de lance via `curl` (o `Idempotency-Key` é obrigatório — RF12):
+Exemplo de lance via `curl` (RF10 exige uma conexão WebSocket aberta na sala e
+o `Idempotency-Key` é obrigatório — RF12):
 
 ```bash
 TOKEN=$(curl -s http://localhost:8088/api/auth/login \
@@ -161,12 +165,20 @@ TOKEN=$(curl -s http://localhost:8088/api/auth/login \
 
 AUCTION=$(curl -s 'http://localhost:8088/api/auctions?status=running' | jq -r '.items[0].id')
 
+# Em outro terminal, abra a sala (Arch: pacman -S websocat):
+websocat "ws://localhost:8088/api/auctions/$AUCTION/ws?token=$TOKEN&role=participant"
+```
+
+```bash
 curl -s -X POST "http://localhost:8088/api/auctions/$AUCTION/bids" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: tente-1' \
   -d '{"amount": 30500}' | jq
 ```
+
+Sem o WebSocket aberto **como participante** a API responde `409 not_in_room`.
+Pela interface web isso é invisível: a sala já conecta antes de liberar o formulário.
 
 Reenvie o mesmo `Idempotency-Key` e o servidor devolve **o mesmo lance**
 (`"replayed": true`), sem duplicar. Reutilizar a mesma chave com outro valor é
@@ -179,9 +191,10 @@ Além do teste manual acima, o backend tem uma suíte de caixa-preta em
 da aplicação.
 
 ```bash
-make test             # auth + SQL injection + corridas + benchmark
+make test             # auth + SQL injection + corridas + features + benchmark
 make test-security    # auth/autorização + SQL injection
 make test-race        # concorrência de lances/cancelamento
+make test-features    # RF23, RF28, RF22 e RF10
 make bench            # benchmark de latência
 make load ARGS="--mode both --users 10,50,100"   # carga/capacidade
 ```
@@ -211,7 +224,7 @@ Referência: `Requisitos_Leilao_Hackathon.pdf`.
 | RF08 cancelamento | só o comitente; Agendado ou Em andamento sem lances; vira Cancelado |
 | RN01 ciclo de vida | 5 estados e transições válidas; com lances só termina Vendido |
 | RF09 sala em tempo real | WebSocket `/api/auctions/{id}/ws` com reconexão e ressincronização |
-| RF10 lances | valida sessão, sala, estado, horário, comitente, líder, preço e crédito |
+| RF10 lances | valida sessão, sala (WebSocket aberto como participante), estado, horário, comitente, líder, preço e crédito |
 | RF11 concorrência | `SELECT ... FOR UPDATE` no Postgres serializa lances do leilão |
 | RF12 idempotência | `Idempotency-Key` único por leilão; reenvio devolve o original |
 | RF14 lance mínimo | calculado só no servidor, por faixa de preço (tabela do documento) |
@@ -226,21 +239,27 @@ Referência: `Requisitos_Leilao_Hackathon.pdf`.
 | RNF03 recriar do zero | este README |
 | RNF04 dados de demo | `backend/seed.py` (5 contas, 6 leilões em estados diferentes) |
 
-### Nível 2 / bônus (parcial, backend)
+### Nível 2 / bônus
 
 - RF13: limite de 500 ms entre lances do mesmo usuário (reenvio idempotente não é punido).
 - RF21: busca combinável por trecho do nome, categoria e estado.
-- RF22: perfil público em `GET /api/users/{id}` (sem e-mail) — ainda sem tela.
+- RF22: busca pública de comitentes (`GET /api/users?q=`) e tela de perfil em
+  `/comitentes/:id` (nome, entrada e leilões ativos/passados).
+- RF23: o comitente edita a duração enquanto Agendado e **só acrescenta** fotos
+  (Agendado ou Em andamento); nada é removido ou trocado.
 - RF24: reconexão automática do WebSocket e estado ressincronizado.
 - RF25/RF26: espectador, contagem de participantes/espectadores e aviso de superado.
 - RF27: "Minhas participações" com situação `leader` / `outbid` / `won`.
+- RF28: relistagem de leilão Encerrado sem lances ou Cancelado, criando um novo
+  leilão para o mesmo item; no máximo um leilão ativo por item.
 - RF29–RF32: pontuação e crédito calculados em `/api/auth/me`; dados de demo com
   rendas diferentes. A **exigência** de crédito no lance fica desligada por
   padrão (`ENFORCE_CREDIT=false`), porque o front atual não coleta renda.
   Ligue com `ENFORCE_CREDIT=true` para testar o bônus.
 
-**Fora do escopo desta entrega:** edição de leilão (RF23), relistagem (RF28),
-tela de perfil público, avaliações/reputação e administração (não existem no edital).
+**Fora do escopo desta entrega:** avaliações/reputação e administração (não
+existem no edital), tela de pontuação/crédito e o gate de comitente do bônus
+(RF30), que dependem de coletar renda no cadastro.
 
 ---
 
@@ -260,11 +279,14 @@ autenticação `Authorization: Bearer <token>`. Erros:
 | GET | `/auctions?q&category&status&page` | — | `{items,has_more,server_time}` |
 | GET | `/auctions/{id}` | — | detalhe público |
 | POST | `/auctions` | sim | cria item + leilão (201) |
+| PATCH | `/auctions/{id}` | sim | `{duration_seconds?, photos?}` — edita duração (Agendado) e anexa fotos (RF23) |
+| POST | `/auctions/{id}/relist` | sim | relista Encerrado sem lances/Cancelado (201, RF28) |
 | POST | `/auctions/{id}/cancel` | sim | cancela (comitente; regras RF08) |
 | GET | `/auctions/{id}/room` | sim | estado da sala + últimos lances |
 | POST | `/auctions/{id}/bids` | sim | `{amount}` + `Idempotency-Key` → 201 `{bid,auction}` |
 | GET | `/me/auctions` | sim | meus leilões |
 | GET | `/me/participations` | sim | `[{auction,situation,my_top_bid}]` |
+| GET | `/users?q=` | — | busca pública de comitentes pelo nome (RF22) |
 | GET | `/users/{id}` | — | perfil público do comitente (RF22) |
 | POST | `/uploads/presign` | sim | `{filename,content_type,size}` → `{upload_url,public_url}` |
 | PUT | URL retornada | assinatura | envia o arquivo |
@@ -301,6 +323,13 @@ Estados: `scheduled`, `running`, `sold`, `unsold`, `cancelled`.
   `backend/app/routers/uploads.py`; o front não muda.
 - **Sessão:** token opaco de 7 dias com hash no banco (permite logout real e
   revogação), em vez de JWT sem estado.
+- **Edição (RF23):** só o comitente; duração apenas enquanto **Agendado** (depois
+  que abre, a linha de chegada não se move) e fotos apenas por **acréscimo**, em
+  Agendado ou Em andamento. Remover/trocar fotos ou encurtar um leilão em curso
+  prejudicaria quem já viu o anúncio ou deu lance, então a API só aceita anexos.
+- **Relistagem (RF28):** cria um novo leilão para o **mesmo item**, com todos os
+  campos editáveis. Um `SELECT ... FOR UPDATE` na linha do item garante que ele
+  nunca fique com dois leilões agendados/em andamento ao mesmo tempo.
 - **Um worker no uvicorn:** as contagens de participantes/espectadores são em
   memória por processo. Com vários workers os lances continuam corretos, mas
   cada socket aparece só no processo que o atende.
@@ -493,6 +522,8 @@ go-horses/
 
 | Sintoma | Causa / solução |
 |---|---|
+| `permission denied` em `/var/run/docker.sock` | sessão sem o grupo `docker`: `newgrp docker` (ou logout/login) e tente de novo; alternativa `sudo docker compose up -d db` |
+| `port is already allocated` na 5432 | já existe Postgres escutando; pule o `make db` (ele detecta e reaproveita) ou pare o container antigo |
 | `prisma-client-py: command not found` | Ative a venv ou use `PATH="$PWD/.venv/bin:$PATH" .venv/bin/prisma generate` |
 | `Can't reach database server` | Postgres não subiu ou `DATABASE_URL` errada (`docker compose up -d db`) |
 | `DATABASE_URL não configurada` | Falta `backend/.env`; copie do `.env.example` |
@@ -522,13 +553,15 @@ go-horses/
 | `test_sql_injection.py` | 183/183 | OK |
 | `test_race_auction.py` (5 rodadas) | 74/74 | OK |
 | `test_race_auction.py --rounds 10` | 89/89 | OK |
+| `test_features.py` | 35/35 | OK |
 
-O `run_all.py` terminou com `Resultado: OK` (auth, SQL injection, corridas e
-benchmark). A corrida `cancel × bid` foi validada nas 10 rodadas: **exatamente
-uma operação vence**. Se o lance vence, o cancelamento recebe `has_bids`; no
-caminho determinístico cancelar-depois-lançar, o lance recebe `auction_closed` e
-`bid_count` continua 0. Essa condição de corrida foi encontrada pela própria
-suíte e corrigida com o mesmo `SELECT ... FOR UPDATE` usado nos lances.
+O `run_all.py` terminou com `Resultado: OK` (auth, SQL injection, corridas,
+features e benchmark). A corrida `cancel × bid` foi validada nas 10 rodadas:
+**exatamente uma operação vence**. Se o lance vence, o cancelamento recebe
+`has_bids`; no caminho determinístico cancelar-depois-lançar, o lance recebe
+`auction_closed` e `bid_count` continua 0. Essa condição de corrida foi
+encontrada pela própria suíte e corrigida com o mesmo `SELECT ... FOR UPDATE`
+usado nos lances.
 
 ### 10.2 Benchmark de leitura
 

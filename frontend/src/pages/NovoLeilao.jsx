@@ -6,13 +6,9 @@ import { useRequireAuth } from "@/lib/auth";
 import Button from "@/components/Button";
 import { ErrorNote, Field, PageTitle } from "@/components/ui";
 import { DEFAULT_CATEGORIES, parseCents, toLocalInput } from "@/utils/format";
+import { ALLOWED_TYPES, MAX_MB, MAX_PHOTOS, MIN_PHOTOS, pickPhotos } from "@/utils/photos";
 
 const MAX_MINUTES = 7 * 24 * 60; // mesmo teto do back-end (7 dias)
-
-const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
-const MIN_PHOTOS = Number(import.meta.env.VITE_MIN_PHOTOS || 3);
-const MAX_PHOTOS = Number(import.meta.env.VITE_MAX_PHOTOS || 10);
-const MAX_MB = Number(import.meta.env.VITE_MAX_PHOTO_MB || 5);
 
 // RF05–RF07: item + leilão numa tela só; fotos vão direto para a nuvem.
 export default function NovoLeilao() {
@@ -38,17 +34,12 @@ export default function NovoLeilao() {
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
 
   function addFiles(list) {
-    const ok = [], errs = [];
-    const room = MAX_PHOTOS - photos.length;
-    for (const file of Array.from(list)) {
-      if (!ALLOWED.includes(file.type)) errs.push(`${file.name}: use JPG, PNG ou WebP.`);
-      else if (file.size > MAX_MB * 1048576) errs.push(`${file.name}: passa de ${MAX_MB} MB.`);
-      else if (file.size === 0) errs.push(`${file.name}: arquivo vazio.`);
-      else if (ok.length >= room) errs.push(`${file.name}: ficou de fora, o limite é de ${MAX_PHOTOS} fotos.`);
-      else ok.push({ file, url: URL.createObjectURL(file), uploaded: null });
-    }
-    setPhotos((p) => [...p, ...ok]);
-    setPhotoErr(errs.join(" "));
+    const { accepted, errors } = pickPhotos(
+      list,
+      Math.max(0, MAX_PHOTOS - photos.length),
+    );
+    setPhotos((p) => [...p, ...accepted.map((x) => ({ ...x, uploaded: null }))]);
+    setPhotoErr(errors.join(" "));
   }
   function removePhoto(i) {
     if (busy) return; // não mexe na lista durante o envio
@@ -74,10 +65,10 @@ export default function NovoLeilao() {
 
     setBusy(true);
     try {
-      let done = 0;
       setProgress(`Enviando fotos (0 de ${photos.length})…`);
       // Guarda a URL de cada foto já enviada: se algo falhar depois (outra foto, a criação do
       // leilão), tentar de novo não reenvia nem deixa cópias órfãs no servidor.
+      let done = 0;
       const urls = await Promise.all(photos.map(async (p) => {
         if (!p.uploaded) p.uploaded = await uploadPhoto(p.file);
         setProgress(`Enviando fotos (${++done} de ${photos.length})…`);
@@ -115,7 +106,7 @@ export default function NovoLeilao() {
         <div className="grid gap-5 md:grid-cols-3">
           <Field label="Preço inicial (R$)" hint="Use vírgula para os centavos."><input className="field" inputMode="decimal" required placeholder="150,00" value={f.price} onChange={set("price")} /></Field>
           <Field label="Início" hint={`Seu fuso: ${tz}`}><input className="field" type="datetime-local" required value={f.start} onChange={set("start")} /></Field>
-          <Field label="Duração (minutos)" hint="Para a demo, use 3.">
+          <Field label="Duração (minutos)" hint="Mínimo de 1 minuto; máximo de 7 dias.">
             <input className="field" type="number" min="1" max={MAX_MINUTES} step="1" required value={f.minutes} onChange={set("minutes")} />
           </Field>
         </div>
@@ -138,7 +129,7 @@ export default function NovoLeilao() {
             {photos.length < MAX_PHOTOS && (
               <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded border border-dashed border-primary/60 text-sm text-primary hover:bg-primary/10 focus-within:outline focus-within:outline-2 focus-within:outline-primary">
                 <ImagePlus aria-hidden="true" /> Adicionar
-                <input type="file" accept={ALLOWED.join(",")} multiple className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                <input type="file" accept={ALLOWED_TYPES.join(",")} multiple className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
               </label>
             )}
           </div>

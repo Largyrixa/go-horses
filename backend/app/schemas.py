@@ -51,6 +51,20 @@ class BidIn(BaseModel):
     )
 
 
+class AuctionUpdateIn(BaseModel):
+    """RF23: só duração (antes do início) e fotos novas (sempre anexadas)."""
+
+    duration_seconds: int | None = Field(
+        default=None,
+        ge=MIN_DURATION_SECONDS,
+        le=MAX_DURATION_SECONDS,
+        strict=True,
+    )
+    photos: list[str] | None = Field(
+        default=None, min_length=1, max_length=MAX_PHOTOS
+    )
+
+
 class PresignIn(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=100)

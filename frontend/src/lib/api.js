@@ -81,12 +81,16 @@ export const api = {
   auctions: (params) => request(`/auctions?${qs(params)}`),
   auction: (id) => request(`/auctions/${encodeURIComponent(id)}`),
   createAuction: (b) => request("/auctions", { method: "POST", body: b }),
+  updateAuction: (id, patch) => request(`/auctions/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  relistAuction: (id, body) => request(`/auctions/${encodeURIComponent(id)}/relist`, { method: "POST", body }),
   cancelAuction: (id) => request(`/auctions/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   room: (id) => request(`/auctions/${encodeURIComponent(id)}/room`),
   // RF12: a chave identifica a tentativa; reenviar a mesma chave devolve o resultado original.
   bid: (id, amount, key) => request(`/auctions/${encodeURIComponent(id)}/bids`, { method: "POST", body: { amount }, headers: { "Idempotency-Key": key } }),
   myAuctions: () => request("/me/auctions"),
   myParticipations: () => request("/me/participations"),
+  users: (q) => request(`/users?${qs({ q })}`),
+  user: (id) => request(`/users/${id}`),
   presign: (b) => request("/uploads/presign", { method: "POST", body: b }),
 };
 

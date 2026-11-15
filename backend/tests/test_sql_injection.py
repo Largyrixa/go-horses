@@ -26,6 +26,7 @@ from common import (
     create_auction,
     ensure_api,
     error_code,
+    join_room,
     looks_like_internal_leak,
     make_client,
     place_bid,
@@ -265,24 +266,9 @@ async def main() -> int:
 
         print("\n-- Idempotency-Key com payload SQL --")
         min_bid = running["min_bid"]
-        started = time.perf_counter()
-        response = await place_bid(
-            client,
-            bidder,
-            running["id"],
-            min_bid,
-            KEY_PAYLOAD,
-        )
-        elapsed = time.perf_counter() - started
-        assert_safe(
-            checker,
-            "lance com Idempotency-Key SQLi",
-            response,
-            elapsed,
-        )
-        checker.equal("lance com chave maliciosa -> 201", response.status_code, 201)
-        if response.status_code == 201:
-            first_bid_id = response.json()["bid"]["id"]
+        room = await join_room(args.base_url, running["id"], bidder)
+        try:
+            started = time.perf_counter()
             response = await place_bid(
                 client,
                 bidder,
@@ -290,12 +276,31 @@ async def main() -> int:
                 min_bid,
                 KEY_PAYLOAD,
             )
-            checker.equal("reenvio da chave maliciosa -> 201", response.status_code, 201)
+            elapsed = time.perf_counter() - started
+            assert_safe(
+                checker,
+                "lance com Idempotency-Key SQLi",
+                response,
+                elapsed,
+            )
+            checker.equal("lance com chave maliciosa -> 201", response.status_code, 201)
             if response.status_code == 201:
-                replay = response.json()
-                checker.equal("reenvio é marcado como replay", replay.get("replayed"), True)
-                checker.equal("reenvio devolve o mesmo lance", replay["bid"]["id"], first_bid_id)
-                checker.equal("reenvio mantém o valor", replay["bid"]["amount"], min_bid)
+                first_bid_id = response.json()["bid"]["id"]
+                response = await place_bid(
+                    client,
+                    bidder,
+                    running["id"],
+                    min_bid,
+                    KEY_PAYLOAD,
+                )
+                checker.equal("reenvio da chave maliciosa -> 201", response.status_code, 201)
+                if response.status_code == 201:
+                    replay = response.json()
+                    checker.equal("reenvio é marcado como replay", replay.get("replayed"), True)
+                    checker.equal("reenvio devolve o mesmo lance", replay["bid"]["id"], first_bid_id)
+                    checker.equal("reenvio mantém o valor", replay["bid"]["amount"], min_bid)
+        finally:
+            await room.close()
 
         detail = await auction_detail(client, running["id"])
         checker.equal("banco registrou apenas um lance", detail["bid_count"], 1)

@@ -23,6 +23,7 @@ from common import (
     create_auction,
     error_code,
     ensure_api,
+    join_room,
     looks_like_internal_leak,
     make_client,
     path_from_public_url,
@@ -275,13 +276,17 @@ async def main() -> int:
         checker.equal("Comitente dá lance no próprio leilão -> 403", response.status_code, 403)
         checker.equal("Lance do comitente retorna seller_cannot_bid", error_code(response), "seller_cannot_bid")
 
-        response = await place_bid(
-            client,
-            buyer,
-            running["id"],
-            min_bid,
-            "buyer-primeiro-lance",
-        )
+        buyer_room = await join_room(args.base_url, running["id"], buyer)
+        try:
+            response = await place_bid(
+                client,
+                buyer,
+                running["id"],
+                min_bid,
+                "buyer-primeiro-lance",
+            )
+        finally:
+            await buyer_room.close()
         checker.equal("Comprador dá lance válido -> 201", response.status_code, 201)
 
         response = await client.post(
