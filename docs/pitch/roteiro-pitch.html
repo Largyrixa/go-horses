@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Go Horses — Roteiro de Pitch e Guia Técnico</title>
+<style>
+  :root{
+    --ink:#141821; --muted:#5a6472; --line:#d7dce3; --soft:#f3f5f8;
+    --brand:#0d5c46; --brand2:#b45309; --danger:#a11d2e; --ok:#166534;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  body{
+    margin:0; color:var(--ink);
+    font-family:"DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+    font-size:10.2pt; line-height:1.45;
+  }
+  h1,h2,h3{line-height:1.2; margin:0}
+  h1{font-size:26pt; letter-spacing:-.4pt}
+  h2{font-size:16pt; color:var(--brand); margin:0 0 6pt; padding-bottom:4pt; border-bottom:2px solid var(--brand)}
+  h3{font-size:11.5pt; margin:12pt 0 4pt; color:#1b2430}
+  h4{font-size:10.5pt; margin:10pt 0 3pt; color:#1b2430}
+  p{margin:0 0 6pt}
+  ul,ol{margin:0 0 7pt 16pt; padding:0}
+  li{margin:0 0 2.5pt}
+  small{color:var(--muted)}
+  code,pre{font-family:"DejaVu Sans Mono", "Liberation Mono", monospace}
+  code{font-size:8.8pt; background:#eef1f5; padding:1px 3px; border-radius:3px}
+  pre{
+    font-size:8.4pt; line-height:1.35; background:#f6f7f9; border:1px solid var(--line);
+    border-left:3px solid var(--brand); padding:7pt 9pt; margin:6pt 0 8pt; white-space:pre-wrap;
+    border-radius:3px;
+  }
+  table{width:100%; border-collapse:collapse; margin:6pt 0 10pt; font-size:9.2pt}
+  th,td{border:1px solid var(--line); padding:4pt 5pt; vertical-align:top; text-align:left}
+  th{background:var(--soft); font-size:8.8pt; text-transform:uppercase; letter-spacing:.3pt; color:#374151}
+  .box{border:1px solid var(--line); border-left:4px solid var(--brand); background:#fbfcfd; padding:8pt 10pt; margin:8pt 0; border-radius:3px; break-inside:avoid}
+  .box.warn{border-left-color:var(--danger); background:#fdf7f8}
+  .box.ok{border-left-color:var(--ok); background:#f6fbf7}
+  .box.note{border-left-color:var(--brand2); background:#fffaf3}
+  .box h4{margin-top:0}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10pt}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8pt}
+  .card{border:1px solid var(--line); border-radius:4px; padding:7pt 8pt; background:#fff; break-inside:avoid}
+  .card .k{font-size:8pt; text-transform:uppercase; letter-spacing:.4pt; color:var(--muted)}
+  .tag{display:inline-block; font-size:7.6pt; font-family:"DejaVu Sans Mono", monospace; border:1px solid var(--line); border-radius:10px; padding:0 6pt; margin-right:3pt; color:#374151; background:#fff}
+  .tag.g{border-color:#9ac7b5; color:#065f46; background:#eefaf4}
+  .tag.r{border-color:#e3b1b8; color:#8a1526; background:#fdf1f3}
+  .cover{height:252mm; display:flex; flex-direction:column; justify-content:space-between; page-break-after:always}
+  .cover .kicker{font-family:"DejaVu Sans Mono", monospace; font-size:9pt; letter-spacing:2pt; text-transform:uppercase; color:var(--brand)}
+  .cover .rule{height:4px; width:70mm; background:var(--brand); margin:8pt 0 14pt}
+  .cover .sub{font-size:12.5pt; color:#374151; max-width:145mm}
+  .cover .meta{font-size:9.2pt; color:var(--muted); border-top:1px solid var(--line); padding-top:8pt}
+  .cover .meta b{color:var(--ink)}
+  .cut{page-break-before:always}
+  .diagram{white-space:pre; font-size:7.9pt; line-height:1.3; overflow:hidden}
+  .toc{columns:2; column-gap:18pt; font-size:9.6pt}
+  .toc div{margin:0 0 3pt; break-inside:avoid}
+  .lead{font-size:11.2pt; color:#2a3340}
+  .kbd{font-family:"DejaVu Sans Mono", monospace; font-size:8.4pt; border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; padding:0 3pt; background:#fff}
+  .nowrap{white-space:nowrap}
+  .split{display:grid; grid-template-columns:1.15fr .85fr; gap:12pt}
+  .small{font-size:9pt}
+  .num{font-family:"DejaVu Sans Mono", monospace; color:var(--brand); font-weight:bold}
+  .qa{margin:0 0 7pt}
+  .qa b{color:var(--brand)}
+  .pill{display:inline-block; background:var(--brand); color:#fff; border-radius:3px; padding:1pt 6pt; font-size:8.2pt; font-family:"DejaVu Sans Mono", monospace}
+  .time{font-family:"DejaVu Sans Mono", monospace; font-size:8.4pt; color:var(--muted)}
+  footer{font-size:8pt; color:var(--muted)}
+  @media print{
+    body{font-size:10pt}
+    .card,.box,pre,table{break-inside:avoid}
+    h2{break-after:avoid}
+    h3{break-after:avoid}
+    .cover{height:auto; min-height:250mm}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ CAPA ============================ -->
+<section class="cover">
+  <div>
+    <div class="kicker">Hackathon · Leilão Online</div>
+    <h1 style="margin-top:10pt">Go Horses<br>Roteiro de Pitch<br>e Guia Técnico</h1>
+    <div class="rule"></div>
+    <p class="sub">Como o sistema funciona de cabo a rabo, como resolvemos os problemas difíceis e o que falar nos 6 minutos de apresentação.</p>
+  </div>
+  <div>
+    <div class="grid2" style="margin-bottom:12pt">
+      <div class="card"><div class="k">Stack</div>FastAPI · Prisma · PostgreSQL 16<br>React 18 · Vite 6 · Tailwind<br>Caddy 2 · systemd · VM Linux</div>
+      <div class="card"><div class="k">Entrega</div>Front + API + banco + fechamento automático<br>na mesma VM, atrás do Caddy<br>Site: <b>200.18.99.113:8088</b></div>
+    </div>
+    <div class="meta">
+      <b>Base do documento:</b> branch <code>fix/correcoes_RF_nucleo_NV2</code> (contém a <code>main</code>, com a correção de concorrência, + RF10/22/23/28 e mensagens de produção).<br>
+      <b>Uso:</b> leitura/estudo em ~30 minutos. Cada seção tem uma parte para falar e outra para responder.<br>
+      <b>Regra de ouro:</b> se não souber uma resposta, volte para <i>“o estado vive no banco e o relógio é o do servidor”</i>.
+    </div>
+  </div>
+</section>
+
+<!-- ============================ COMO USAR ============================ -->
+<section>
+  <h2>Como usar este roteiro (30 minutos)</h2>
+  <table>
+    <tr><th style="width:16mm">Min</th><th>O que fazer</th><th style="width:52mm">Seção</th></tr>
+    <tr><td class="num">0–3</td><td>Ler a abertura e o fechamento do pitch em voz alta uma vez.</td><td>1.1–1.7</td></tr>
+    <tr><td class="num">3–9</td><td>Fixar a arquitetura, o modelo de dados e a máquina de estados.</td><td>2</td></tr>
+    <tr><td class="num">9–17</td><td>Decorar o caminho de um lance (12 passos). É o coração da explicação.</td><td>3</td></tr>
+    <tr><td class="num">17–24</td><td>Ler os cartões de problema→solução; pelo menos race condition, idempotência e fechamento.</td><td>4</td></tr>
+    <tr><td class="num">24–27</td><td>Ler as 3 decisões difíceis e “o que ficou de fora”.</td><td>5–6</td></tr>
+    <tr><td class="num">27–30</td><td>Checklist da demo, perguntas prováveis e cola final.</td><td>6–8</td></tr>
+  </table>
+  <div class="box note">
+    <h4>Se sobrar só 10 minutos</h4>
+    <p style="margin:0">Leia a Seção 1 (fala), a Seção 3 (caminho do lance) e a cola da Seção 8. O resto é backup para perguntas.</p>
+  </div>
+</section>
+
+<!-- ============================ 1. PITCH ============================ -->
+<section>
+  <h2>1. Pitch em 6 minutos (roteiro falado)</h2>
+  <p class="lead">A banca pede três coisas: <b>arquitetura na VM e por quê</b>, <b>as 2–3 decisões mais difíceis</b> (o que foi considerado e quanto custou) e <b>o que ficou de fora e por quê</b>. O roteiro abaixo cobre isso na ordem em que rende mais.</p>
+
+  <table>
+    <tr><th style="width:14mm">Tempo</th><th style="width:34mm">Bloco</th><th>Fala-chave / ação</th></tr>
+    <tr><td class="time">0:00</td><td><b>Abertura</b></td><td>“Leilão online em tempo real: o comitente anuncia, todo mundo disputa ao vivo e o leilão abre e fecha sozinho — com regras iguais para todos, mesmo com 50 pessoas clicando ao mesmo tempo.”</td></tr>
+    <tr><td class="time">0:30</td><td><b>Problema</b></td><td>“O difícil não é a tela: é manter preço, líder e horário corretos quando muitos lances chegam juntos e quando o servidor reinicia.”</td></tr>
+    <tr><td class="time">0:45</td><td><b>Demo</b></td><td>Abrir a sala com 2 navegadores (líder e desafiante), dar lances, mostrar “lance superado”, prorrogação e fechamento automático. (Seção 6.)</td></tr>
+    <tr><td class="time">3:00</td><td><b>Arquitetura</b></td><td>“Caddy na 8080 serve o SPA e faz proxy de <code>/api</code> para o uvicorn na 8088; Prisma fala com o Postgres. WebSocket para a sala. systemd supervisiona.”</td></tr>
+    <tr><td class="time">4:00</td><td><b>3 decisões</b></td><td>Lock de linha no banco; WebSocket com presença em memória; fechamento por ticker com <code>UPDATE</code> condicional. (Seção 5.)</td></tr>
+    <tr><td class="time">5:30</td><td><b>O que ficou fora</b></td><td>“Fotos em nuvem (RF07), operação bônus (HTTPS, multi-instância, métricas) e a UI de pontuação. Escolhemos entregar o Núcleo correto antes de ampliar.”</td></tr>
+    <tr><td class="time">6:00</td><td><b>Fechamento</b></td><td>“O sistema é pequeno de operar, mas as garantias são as mesmas de um leilão de verdade: ninguém perde lance por corrida, ninguém duplica lance por retry e o relógio não depende do navegador.”</td></tr>
+  </table>
+
+  <h3>1.1 Abertura (fala pronta)</h3>
+  <div class="box">
+    <p style="margin:0">“O Go Horses é uma plataforma de leilão online em tempo real. O comitente anuncia um item com fotos, preço inicial e duração; os compradores entram numa sala e disputam lance a lance; o leilão abre e fecha sozinho, com vencedor. A parte que a gente trata com cuidado é a concorrência: dezenas de pessoas clicando no mesmo segundo, rede caindo, servidor reiniciando — e o resultado tem que ser sempre um só.”</p>
+  </div>
+
+  <h3>1.2 Demo guiada (2 minutos)</h3>
+  <ol>
+    <li><b>Listagem pública</b> (sem login): filtros por nome, categoria e estado; link para detalhe e sala.</li>
+    <li><b>Comitente</b> (Ana) cria um leilão: 3 fotos, preço inicial, “abrir em 1 minuto”, duração 3 minutos.</li>
+    <li><b>Comprador</b> (Bruno) entra na sala e dá o mínimo; <b>Carla</b> supera; Bruno recebe o aviso de “lance superado” na hora.</li>
+    <li><b>Último segundo</b>: lance dentro dos 2 minutos finais prorroga o término (até 30 min acumulados).</li>
+    <li><b>Fechamento</b>: sem intervenção, vira <i>Vendido</i> com vencedor e valor; todos veem o resultado.</li>
+    <li><b>Comitente na sala</b>: aparece como espectador e o servidor recusa lance dele.</li>
+  </ol>
+
+  <div class="box ok">
+    <h4>Frase que conecta demo e engenharia</h4>
+    <p style="margin:0">“Repare que o navegador só desenha. Quem decide o horário, o mínimo e o vencedor é o servidor, dentro de uma transação no Postgres.”</p>
+  </div>
+</section>
+
+<!-- ============================ 2. ARQUITETURA ============================ -->
+<section>
+  <h2>2. O sistema de cabo a rabo</h2>
+
+  <h3>2.1 Stack e por que cada peça</h3>
+  <table>
+    <tr><th style="width:34mm">Camada</th><th style="width:52mm">Tecnologia</th><th>Por que</th></tr>
+    <tr><td>Frontend</td><td>React 18 + Vite 6 + Tailwind</td><td>SPA simples, build estático servido pelo Caddy; um único layer de API (<code>src/lib/api.js</code>).</td></tr>
+    <tr><td>API</td><td>FastAPI + uvicorn</td><td>Async, tipado, Swagger grátis; WebSocket nativo.</td></tr>
+    <tr><td>Persistência</td><td>PostgreSQL 16 + Prisma (client Python)</td><td>Transações reais, <code>FOR UPDATE</code>, timestamptz, unique constraints. O banco é a fonte da verdade.</td></tr>
+    <tr><td>Reverse proxy</td><td>Caddy 2</td><td>Serve o <code>dist</code>, faz proxy de <code>/api</code>, <code>/uploads</code>, <code>/static</code>; Upgrade de WebSocket automático.</td></tr>
+    <tr><td>Supervisão</td><td>systemd</td><td>API reinicia sozinha; logs em <code>journalctl</code>.</td></tr>
+  </table>
+
+  <h3>2.2 Diagrama da VM</h3>
+  <pre class="diagram">navegador
+   │ HTTP/WS
+   ▼
+200.18.99.113:8088  ──(NAT 8088→8080)──►  Caddy :8080
+                                            ├─ /          → frontend/dist (SPA)
+                                            ├─ /api/*     → 127.0.0.1:8088 (REST + WS)
+                                            ├─ /uploads/* → 127.0.0.1:8088 (fotos)
+                                            ├─ /static/*  → 127.0.0.1:8088 (seed)
+                                            └─ /health    → 127.0.0.1:8088
+                                                      │
+                                                      ▼
+                                            uvicorn :8088 (FastAPI, 1 worker)
+                                                      │ Prisma (pool)
+                                                      ▼
+                                            PostgreSQL :5432
+
+SSH da organização: 200.18.99.113:8028 → 22</pre>
+
+  <div class="box note">
+    <p style="margin:0"><b>Por que tudo na mesma origem?</b> O front chama <code>/api</code> relativo. Em dev quem repassa é o Vite; em produção é o Caddy. Isso elimina CORS no caminho normal e evita URL fixa no bundle. Fotos usam <code>/uploads/...</code> relativo pelo mesmo motivo.</p>
+  </div>
+
+  <div class="box">
+    <h4>Por que essa arquitetura (e não outra)</h4>
+    <p style="margin:0">Uma VM, um processo de API e um Postgres: menos peças para operar e explicar. O Caddy resolve SPA + proxy + WebSocket sem configuração extra; o systemd dá restart e logs. Docker Compose ficou só no banco local de desenvolvimento. Fila/broker só fariam sentido com várias instâncias ou volume muito maior.</p>
+  </div>
+
+  <h3>2.3 Modelo de dados (5 tabelas)</h3>
+  <table>
+    <tr><th style="width:26mm">Tabela</th><th>Campos que importam</th><th style="width:58mm">Papel</th></tr>
+    <tr><td><code>users</code></td><td>email único, password_hash (scrypt), display_name, monthly_income_cents</td><td>Conta; não existe “role” de usuário.</td></tr>
+    <tr><td><code>sessions</code></td><td>token_hash (SHA-256), expires_at</td><td>Sessão opaca de 7 dias; logout real.</td></tr>
+    <tr><td><code>items</code></td><td>name, description, category, photos[], seller_id</td><td>O produto. Um item pode ter vários leilões (relistagem).</td></tr>
+    <tr><td><code>auctions</code></td><td>status, starting/current/final_price, bid_count, starts_at, ends_at, original_ends_at, extension_seconds, leader_id, winner_id</td><td>O evento e o estado vivo da disputa.</td></tr>
+    <tr><td><code>bids</code></td><td>auction_id, bidder_id, amount_cents, idempotency_key, created_at</td><td>Lance imutável; <code>UNIQUE(auction_id, idempotency_key)</code>.</td></tr>
+  </table>
+
+  <h3>2.4 Máquina de estados (RN01)</h3>
+  <pre>Agendado ──chega o início──► Em andamento ──termina com lances──► Vendido
+    │                              │
+    │ antes do início              └──termina sem lances──► Encerrado sem lances
+    └──cancelado sem lances──► Cancelado ◄──cancelado sem lances (em andamento)
+
+5 estados, 5 transições. Vendido / Encerrado sem lances / Cancelado são finais.
+Em andamento com lances SÓ pode terminar Vendido (cancelamento bloqueado).</pre>
+
+  <h3>2.5 Frontend (páginas e camadas)</h3>
+  <div class="grid2">
+    <div class="card"><div class="k">Páginas</div>Home (lista + filtros), Detalhe, Sala, Novo leilão, Relistar, Minhas participações, Meus leilões, Login/Cadastro, Comitentes, Perfil público.</div>
+    <div class="card"><div class="k">Camadas</div><code>lib/api.js</code> (único lugar que conhece a API), <code>lib/auth.jsx</code> (sessão), <code>lib/useRoom.js</code> (WS + reconexão), <code>utils/photos.js</code> (upload), <code>utils/format.js</code> (dinheiro/tempo).</div>
+  </div>
+
+  <h3>2.6 Deploy e operação</h3>
+  <ul>
+    <li><b>Caddyfile</b>: SPA com <code>try_files ... /index.html</code> e proxy por prefixo. WebSocket sobe sem configuração extra.</li>
+    <li><b>systemd</b>: <code>gohorses-api.service</code> com <code>--workers 1</code>; <code>Restart=always</code>.</li>
+    <li><b>redeploy.sh</b>: puxa <code>origin/main</code>, instala deps, <code>prisma generate/db push</code>, reinicia API, rebuilda front, valida Caddy e checa <code>/api/health</code>.</li>
+    <li><b>Portas</b>: front/proxy 8080, API 8088, Postgres 5432. Público 8088 → VM 8080; SSH 8028.</li>
+    <li><b>Dev local</b>: <code>make db</code> (reaproveita Postgres se já houver) → <code>make setup</code> → <code>make api</code> + <code>make web</code>.</li>
+  </ul>
+</section>
+
+<!-- ============================ 3. LANCE ============================ -->
+<section>
+  <h2>3. O caminho de um lance (o coração)</h2>
+  <p class="lead">Se você souber explicar esta seção, explica 70% do sistema. Tudo acontece dentro de uma transação do Postgres.</p>
+
+  <pre>POST /api/auctions/{id}/bids      Authorization: Bearer ...      Idempotency-Key: uuid
+
+ 1. auth ................. valida sessão (hash SHA-256 + expiração)
+ 2. header ............... exige Idempotency-Key não vazio
+ 3. BEGIN + lock ......... SELECT id FROM auctions WHERE id=$1 FOR UPDATE
+ 4. carrega leilão ....... status, preços, ends_at, seller, leader
+ 5. replay? .............. busca (auction_id, key); se existe → devolve o MESMO bid
+ 6. sala (RF10) .......... usuário tem WS aberto como participante?
+ 7. estado/horário ....... scheduled? abre na hora; final? recusa; now >= ends_at? recusa
+ 8. papéis ............... comitente não dá lance; líder não cobre o próprio lance
+ 9. rate limit ........... 500 ms entre lances do mesmo usuário/leilão
+10. mínimo .............. mínimo recalculado DENTRO do lock (nunca do cliente)
+11. prorrogação ......... remaining <= 120s? empurra o fim (teto 30 min)
+12. grava tudo .......... INSERT bid + UPDATE auction
+                         (preço, count, leader, ends_at)
+    COMMIT
+13. broadcast ........... WS recebe o novo estado SÓ depois do commit
+14. resposta ............ { bid, auction, replayed: false|true }</pre>
+
+  <h3>3.1 Por que essa ordem importa</h3>
+  <table>
+    <tr><th style="width:38mm">Passo</th><th>Se mudar de lugar, quebra…</th></tr>
+    <tr><td>Lock antes de ler preço</td><td>Dois lances leriam o mesmo mínimo e ambos passariam.</td></tr>
+    <tr><td>Replay antes de validar</td><td>Um retry legítimo receberia “leilão encerrado” mesmo já tendo sido aceito.</td></tr>
+    <tr><td>Replay antes da sala (RF10)</td><td>Queda de rede faria o reenvio idempotente falhar (RF12).</td></tr>
+    <tr><td>Broadcast depois do commit</td><td>A sala veria um estado que o banco ainda não confirmou.</td></tr>
+    <tr><td>Mínimo dentro do lock</td><td>Cliente mandaria o mínimo “velho” e o preço andaria para trás.</td></tr>
+  </table>
+
+  <h3>3.2 Fechamento automático (paralelo ao lance)</h3>
+  <pre>A cada 0,5 s (ticker no próprio FastAPI):
+  abre:  UPDATE auctions SET status='running' WHERE status='scheduled' AND starts_at <= now
+  fecha: UPDATE auctions SET status='sold'|'unsold', winner_id, final_price_cents, closed_at
+          WHERE id=$1 AND status='running' AND ends_at <= now      ← condição atômica
+
+Se um lance prorrogou ends_at no meio do caminho, o WHERE não casa e nada é fechado.
+Se o processo cair, ao subir o ticker encontra o que passou e fecha (estado no banco).</pre>
+</section>
+
+<!-- ============================ 4. PROBLEMAS ============================ -->
+<section>
+  <h2>4. Problemas principais e como resolvemos</h2>
+
+  <div class="box">
+    <h4>4.1 Race condition: dois lances no mesmo milissegundo</h4>
+    <p><b>Problema:</b> A e B leem o mesmo preço, ambos calculam o mínimo e ambos gravam. Preço “anda para trás”, líder errado ou dois lances com o mesmo valor.</p>
+    <p><b>Solução:</b> <code>SELECT id FROM auctions WHERE id=$1 FOR UPDATE</code> no início da transação. O Postgres serializa os lances <b>do mesmo leilão</b>: o segundo espera o primeiro commitar, relê o estado e é recusado se ficou abaixo do novo mínimo. No fechamento, um <code>UPDATE ... WHERE status='running' AND ends_at &lt;= now</code> reavalia a condição depois do lock.</p>
+    <p><b>Custo:</b> lances do mesmo leilão serializam (trade-off consciente); timeout de transação de 10 s.</p>
+    <p><b>Prova medida:</b> 50 POSTs simultâneos com a <b>mesma</b> <code>Idempotency-Key</code> → <span class="tag g">1 × replayed=false</span><span class="tag g">49 × replayed=true</span> e <code>bid_count = 1</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.2 Idempotência: retry não vira segundo lance (RF12)</h4>
+    <p><b>Problema:</b> o servidor grava, a resposta se perde; o usuário clica de novo.</p>
+    <p><b>Solução:</b> o navegador gera uma chave por tentativa/valor (<code>crypto.randomUUID</code>). A API grava em <code>bids.idempotency_key</code> com <code>UNIQUE(auction_id, key)</code>. Se a chave já existe, devolve o lance original (<code>replayed: true</code>) <b>antes</b> de qualquer validação. No front, a chave é mantida em falha de rede/5xx e descartada em 4xx.</p>
+    <p><b>Custo:</b> chaves ficam na tabela (crescimento pequeno, sem TTL).</p>
+  </div>
+
+  <div class="box">
+    <h4>4.3 Fechamento e reinício (RF17/RF18)</h4>
+    <p><b>Problema:</b> não depender de cron, nem perder o horário se a API reiniciar.</p>
+    <p><b>Solução:</b> ticker de 0,5 s no processo + <code>sync_auctions</code> também nas listagens/sala/meus leilões. O fechamento é um <code>UPDATE</code> condicional atômico; fechar duas vezes não duplica resultado. <code>ends_at</code> (já com prorrogação) está no banco.</p>
+    <p><b>Custo:</b> o fechamento pode atrasar até ~0,5 s; ao subir, o atraso é o do boot.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.4 Relógio do servidor, não do navegador (RF16)</h4>
+    <p><b>Problema:</b> o contador da tela pode estar errado; o lance não pode passar por isso.</p>
+    <p><b>Solução:</b> datas em UTC (<code>timestamptz</code>), <code>server_time</code> nas respostas e no WS; o front só desenha a contagem com offset. O <code>place_bid</code> compara <code>now</code> do servidor com <code>ends_at</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.5 Prorrogação (RF15)</h4>
+    <p><b>Problema:</b> lance de último segundo não pode vencer sem chance de resposta, mas o leilão não pode durar para sempre.</p>
+    <p><b>Solução:</b> se faltam ≤ 120 s, <code>ends_at</code> vira <code>agora + 120 s</code>; o acréscimo total é limitado a 30 min (<code>extension_seconds</code>). O novo <code>ends_at</code> é persistido, então reinício não perde a prorrogação.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.6 Sala em tempo real e reconexão (RF09/RF24)</h4>
+    <p><b>Problema:</b> todos veem preço/líder/tempo sem recarregar; rede cai e volta.</p>
+    <p><b>Solução:</b> WebSocket por sala; o servidor faz broadcast do estado <b>depois do commit</b>. O cliente reconecta com backoff (1 s → 8 s) e faz <code>GET /room</code> para ressincronizar. Presença (participantes/espectadores) fica em memória por processo.</p>
+    <p><b>Custo:</b> com mais de um worker, cada processo contaria só os seus sockets — por isso a produção usa <code>--workers 1</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.7 Comitente, espectador e “estar na sala” (RF04/RF10/RF25)</h4>
+    <p><b>Problema:</b> o comitente não pode dar lance; e o edital exige que o lance venha de quem está na sala.</p>
+    <p><b>Solução:</b> o servidor força o comitente a <code>spectator</code> no WS e rejeita lance dele (403). O <code>place_bid</code> consulta <code>rooms.has_participant(auction, user)</code>: sem WS aberto como participante → <code>409 not_in_room</code>. O replay idempotente acontece antes dessa checagem.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.8 Edição sem prejudicar quem já deu lance (RF23)</h4>
+    <p><b>Problema:</b> mudar o anúncio debaixo de quem já está disputando.</p>
+    <p><b>Solução:</b> só o comitente; <b>duração apenas enquanto Agendado</b> (depois que abre, a linha de chegada não se move); fotos <b>só por acréscimo</b> (Agendado ou Em andamento), com lock na linha do item para duas edições não se sobrescreverem. Fotos existentes não podem ser removidas ou trocadas.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.9 Relistagem com um único leilão ativo (RF28)</h4>
+    <p><b>Problema:</b> relistar um item cancelado/sem lances sem criar dois leilões concorrentes para o mesmo item.</p>
+    <p><b>Solução:</b> <code>POST /auctions/{id}/relist</code> reusa o <b>mesmo item</b>, com todos os campos editáveis. Na transação, <code>SELECT ... FOR UPDATE</code> no item e checagem de leilão <code>scheduled/running</code>; relistagens concorrentes serializam e a segunda recebe <code>409 item_has_active_auction</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.10 Dev, produção e fotos com a mesma URL</h4>
+    <p><b>Problema:</b> URL absoluta (<code>http://localhost:8088/uploads/...</code>) quebra ao publicar na VM.</p>
+    <p><b>Solução:</b> <code>PUBLIC_BASE_URL</code> vazio → a API devolve caminho relativo (<code>/uploads/...</code>, <code>/static/...</code>); o Vite faz proxy em dev e o Caddy em produção. O serializer reduz URLs absolutas antigas para o caminho, então banco antigo continua funcionando. Upload continua no contrato presign (<code>POST /api/uploads/presign</code> → <code>PUT</code> assinado).</p>
+  </div>
+
+  <div class="box warn">
+    <h4>4.11 Dívida assumida: fotos em disco local (RF07)</h4>
+    <p>O edital pede storage em nuvem. <b>Não temos credenciais</b> na VM; a entrega usa disco local atrás do contrato de presign e o Caddy serve <code>/uploads</code>. Trocar por S3/R2 muda <b>só</b> <code>backend/app/routers/uploads.py</code> — o front não muda. Diga isso antes que a banca pergunte.</p>
+  </div>
+
+  <div class="box">
+    <h4>4.12 Segurança e dinheiro</h4>
+    <p>Senha com <b>scrypt</b> (N=2<sup>14</sup>, r=8, p=1, salt de 16 bytes); sessão é token opaco de 32 bytes, guardado como <b>SHA-256</b>, 7 dias, logout apaga; toda ação protegida valida a sessão. Dinheiro é <b>inteiro em centavos</b> do começo ao fim; horários em UTC ISO e formatados no fuso do navegador.</p>
+  </div>
+</section>
+
+<!-- ============================ 5. DECISOES ============================ -->
+<section>
+  <h2>5. As 3 decisões difíceis (o que a banca quer ouvir)</h2>
+  <table>
+    <tr><th style="width:38mm">Decisão</th><th>O que consideramos</th><th style="width:48mm">Escolha e custo</th></tr>
+    <tr>
+      <td><b>Concorrência do lance</b></td>
+      <td>Lock otimista (versão), fila/Redis, ou lock de linha no Postgres.</td>
+      <td><b>Lock de linha</b> (<code>FOR UPDATE</code>): correção simples, sem infra extra. Custo: lances do mesmo leilão serializam; não escala escrita do mesmo leilão horizontalmente.</td>
+    </tr>
+    <tr>
+      <td><b>Tempo real</b></td>
+      <td>Polling de 1 s, SSE, WebSocket com broker (Redis/pubsub) ou WebSocket + memória.</td>
+      <td><b>WS + presença em memória</b>: latência baixa, sem broker. Custo: 1 worker; presença por processo; cliente precisa reconectar e ressincronizar.</td>
+    </tr>
+    <tr>
+      <td><b>Fechamento automático</b></td>
+      <td>Cron externo, worker/queue, ou ticker no processo com UPDATE condicional.</td>
+      <td><b>Ticker 0,5 s</b>: sem peça extra, sobrevive a restart porque o estado está no banco. Custo: só fecha enquanto a API está de pé; atraso de até ~0,5 s.</td>
+    </tr>
+  </table>
+
+  <div class="box note">
+    <h4>Como falar de trade-off sem se enrolar</h4>
+    <p style="margin:0">“A escolha foi por <b>correção primeiro, escala depois</b>. O gargalo hoje é por leilão, não global: dois leilões diferentes dão lance em paralelo. Se precisássemos de vários servidores, o próximo passo seria uma fila por leilão ou particionar a escrita — o <code>UPDATE</code> condicional e a chave de idempotência continuariam valendo.”</p>
+  </div>
+
+  <h3>5.1 O que ficou de fora (e por quê)</h3>
+  <table>
+    <tr><th style="width:52mm">Item</th><th>Motivo</th><th style="width:44mm">Se der tempo…</th></tr>
+    <tr><td>RF07 — fotos em nuvem</td><td>Sem credenciais de storage na VM; priorizamos o fluxo completo com presign.</td><td>Trocar só <code>uploads.py</code> por S3/R2.</td></tr>
+    <tr><td>Bônus de operação</td><td>Banco gerenciado, HTTPS/domínio, 1 comando, CI/CD, multi-instância, métricas e teste de carga.</td><td>HTTPS + métricas são os de maior retorno.</td></tr>
+    <tr><td>RF29–RF32 (UI)</td><td>Score/crédito existem no backend; o cadastro não coleta renda e a exigência fica desligada (<code>ENFORCE_CREDIT=false</code>).</td><td>Pedir renda no cadastro + tela de crédito + gate “Quero vender”.</td></tr>
+    <tr><td>Edição além de duração/fotos</td><td>Mudar preço/descrição em leilão aberto prejudica quem já decidiu.</td><td>Ampliar só antes do início, com histórico.</td></tr>
+    <tr><td>CORS amplo (PNA)</td><td>Middleware para o Chrome liberar rede privada acabou com <code>allow_origin_regex</code> amplo.</td><td>Restringir às origens reais antes de produção.</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 6. DEMO ============================ -->
+<section>
+  <h2>6. Demo passo a passo (com plano B)</h2>
+  <table>
+    <tr><th style="width:8mm">#</th><th style="width:48mm">Ação</th><th>O que deve aparecer</th><th style="width:44mm">Se falhar</th></tr>
+    <tr><td>1</td><td>Abrir Home sem login</td><td>Lista pública, filtros combináveis, estados.</td><td>Use a lista já carregada; mostre o filtro por estado.</td></tr>
+    <tr><td>2</td><td>Ana cria leilão (1 min / 3 min)</td><td>3–10 fotos, preço, início, duração; redireciona ao detalhe.</td><td>Use um leilão <i>agendado</i> do seed.</td></tr>
+    <tr><td>3</td><td>Bruno e Carla na sala</td><td>Preço, mínimo, líder, contagem, últimos lances via WS.</td><td>Recarregue a sala; o WS reconecta.</td></tr>
+    <tr><td>4</td><td>Bruno dá o mínimo; Carla supera</td><td>Bruno vê “lance superado” e novo mínimo na hora.</td><td>Mostre o toast e o campo atualizado.</td></tr>
+    <tr><td>5</td><td>Lance nos últimos 2 min</td><td>Término salta para +2 min (mantendo o teto).</td><td>Explique pelo cartão 4.5.</td></tr>
+    <tr><td>6</td><td>Ana abre a sala</td><td>“Você é o comitente”: espectador, sem formulário de lance.</td><td>Mostre o 403 do servidor se tentar via API.</td></tr>
+    <tr><td>7</td><td>Esperar o relógio</td><td>Fecha sozinho: Vendido com vencedor/valor ou sem lances.</td><td>Use o leilão de 1 min; ou reinicie a API para provar RF18.</td></tr>
+  </table>
+
+  <h3>6.1 Provas técnicas de 30 segundos</h3>
+  <pre># saúde da API
+curl -s http://127.0.0.1:8088/api/health
+
+# sem WS como participante, o lance é recusado (RF10)
+curl -s -X POST http://127.0.0.1:8088/api/auctions/$ID/bids \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: teste-1" -d '{"amount": 30500}'
+# → 409 not_in_room
+
+# idempotência: repita a MESMA chave com WS aberto
+# → 1º: "replayed": false | 2º: "replayed": true  (bid_count não sobe de novo)</pre>
+
+  <div class="box ok">
+    <h4>Resultado que já medimos (pode citar)</h4>
+    <p style="margin:0">50 POSTs simultâneos com a mesma <code>Idempotency-Key</code>: <b>1</b> gravação, <b>49</b> replays, <code>bid_count = 1</code>. O lock + unique fizeram o trabalho.</p>
+  </div>
+
+  <h3>6.2 Checklist antes de apresentar</h3>
+  <ul>
+    <li><code>make db</code> → <code>make setup</code> → <code>make api</code> + <code>make web</code>; abrir <b>http://localhost:8080</b>.</li>
+    <li>Três janelas: Ana (comitente), Bruno e Carla (compradores) — ou uma anônima para “visitante”.</li>
+    <li>Um leilão já em andamento do seed como plano B; um agendado como plano C.</li>
+    <li>Saber a senha das contas: <code>senha1234</code>.</li>
+    <li>Se for mostrar a VM: site <code>200.18.99.113:8088</code>; API interna 8088; Caddy 8080.</li>
+  </ul>
+</section>
+
+<!-- ============================ 7. Q&A ============================ -->
+<section>
+  <h2>7. Perguntas prováveis (respostas curtas)</h2>
+
+  <p class="qa"><b>E se dois lances chegarem no mesmo milissegundo?</b> O <code>FOR UPDATE</code> serializa pelo leilão. O primeiro commita; o segundo relê o preço e recebe <code>409 bid_too_low</code> com o novo mínimo.</p>
+  <p class="qa"><b>E se o servidor cair no meio do leilão?</b> Nada de estado em memória decide o resultado: status, preços e <code>ends_at</code> estão no Postgres. Ao subir, o ticker abre/fecha o que passou; o <code>UPDATE</code> condicional evita fechar duas vezes.</p>
+  <p class="qa"><b>O contador do navegador pode mentir?</b> Pode atrasar/adiantar visualmente, mas o lance é validado com o relógio do servidor. Depois de <code>ends_at</code>, é recusado.</p>
+  <p class="qa"><b>Como evita lance duplicado?</b> <code>Idempotency-Key</code> única por leilão. Reenvio devolve o resultado original e não cria segundo lance.</p>
+  <p class="qa"><b>O que impede uma rajada de cliques?</b> 500 ms entre lances do mesmo usuário no mesmo leilão; o reenvio idempotente não é punido e usuários diferentes não se bloqueiam.</p>
+  <p class="qa"><b>Por que não usar Redis/fila?</b> O Postgres já é a fonte da verdade e o lock de linha resolve com uma transação. Redis entraria se precisássemos de várias instâncias ou de leilões com milhões de lances por segundo.</p>
+  <p class="qa"><b>Por que um único worker do uvicorn?</b> A contagem de participantes/espectadores é em memória por processo. Os lances continuam corretos com vários workers (lock), mas a contagem seria por processo. Preferimos consistência da sala.</p>
+  <p class="qa"><b>Um item pode ter dois leilões ativos?</b> Não. A relistagem trava a linha do item e recusa se já existe leilão agendado/em andamento.</p>
+  <p class="qa"><b>O comitente pode editar o que?</b> Duração só antes do início; fotos só por acréscimo. Nada é removido ou trocado, para não prejudicar quem já viu/deu lance.</p>
+  <p class="qa"><b>As fotos estão na nuvem?</b> Não — é a lacuna do RF07. Estão em disco local atrás de um contrato de presign; trocar por S3/R2 mexe só em um arquivo do backend.</p>
+  <p class="qa"><b>Como garante que o lance veio de quem está na sala?</b> O <code>place_bid</code> pergunta ao <code>RoomManager</code> se há WebSocket aberto como participante. Sem isso, 409 <code>not_in_room</code>.</p>
+  <p class="qa"><b>Como o dinheiro é tratado?</b> Inteiro em centavos em todo o caminho; horários em UTC ISO; formatação no fuso do navegador. Sem float.</p>
+  <p class="qa"><b>Quais foram as decisões mais difíceis?</b> Lock de linha vs fila; WS + memória vs broker; ticker vs cron. (Seção 5.)</p>
+  <p class="qa"><b>O que vocês deixaram de fora?</b> RF07 (nuvem), bônus de operação, UI de score/crédito e edição além de duração/fotos. (Seção 5.1.)</p>
+
+  <h3>7.1 Glossário rápido (para não trocar as palavras)</h3>
+  <table>
+    <tr><th style="width:34mm">Termo</th><th>Definição no projeto</th></tr>
+    <tr><td><b>Comitente</b></td><td>Quem anuncia o item. É o <code>seller_id</code> do leilão; nunca dá lance no próprio leilão.</td></tr>
+    <tr><td><b>Comprador</b></td><td>Qualquer usuário logado. Não há “role” fixa: o mesmo usuário pode ser comitente num leilão e comprador em outro.</td></tr>
+    <tr><td><b>Participante</b></td><td>Usuário na sala com WS aberto no papel <code>participant</code>; é quem pode dar lance (RF10).</td></tr>
+    <tr><td><b>Espectador</b></td><td>Na sala apenas assistindo (<code>spectator</code>). O comitente é sempre rebaixado a espectador.</td></tr>
+    <tr><td><b>Lance mínimo</b></td><td>Menor valor aceito agora: preço inicial no primeiro lance; depois, preço atual + incremento da faixa.</td></tr>
+    <tr><td><b>Líder</b></td><td>Autor do maior lance aceito; <code>leader_id</code> no leilão.</td></tr>
+    <tr><td><b>Prorrogação</b></td><td>Acréscimo de até 2 min quando há lance nos 2 min finais, com teto de 30 min acumulados.</td></tr>
+    <tr><td><b>Idempotência</b></td><td>Reenviar o mesmo pedido devolve o resultado original; não cria efeito duplicado.</td></tr>
+    <tr><td><b>Relistagem</b></td><td>Novo leilão para o mesmo item, após encerrado sem lances ou cancelado; nunca dois ativos ao mesmo tempo.</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 8. COLA ============================ -->
+<section class="cut">
+  <h2>8. Cola final (decore estes números)</h2>
+  <div class="grid3">
+    <div class="card"><div class="k">Tempo</div>Ticker <b>0,5 s</b><br>Prorrogação <b>120 s</b><br>Teto <b>30 min</b><br>Sessão <b>7 dias</b></div>
+    <div class="card"><div class="k">Lance</div>Rate limit <b>500 ms</b><br>Mínimo <b>recalculado no lock</b><br>Replay <b>antes</b> de validar<br>Chave <b>única por leilão</b></div>
+    <div class="card"><div class="k">Limites</div>Fotos <b>3–10</b><br>Foto <b>5 MB</b><br>Duração <b>60 s–7 d</b><br>Início <b>≤ 30 d</b></div>
+    <div class="card"><div class="k">Portas</div>Front/Caddy <b>8080</b><br>API <b>8088</b><br>Postgres <b>5432</b><br>SSH <b>8028</b></div>
+    <div class="card"><div class="k">Lista</div>Página <b>12</b><br>Últimos lances <b>20</b><br>Nome <b>120</b> / desc. <b>2000</b></div>
+    <div class="card"><div class="k">Estados</div>scheduled · running<br>sold · unsold<br>cancelled</div>
+  </div>
+
+  <h3>8.1 Mapa de arquivos (aponte sem gaguejar)</h3>
+  <table>
+    <tr><th style="width:62mm">Arquivo</th><th>Responsabilidade</th></tr>
+    <tr><td><code>backend/app/auction_service.py</code></td><td>Regras: criar/editar/relistar/cancelar, lance, sync, crédito. Coração do sistema.</td></tr>
+    <tr><td><code>backend/app/realtime.py</code></td><td>Salas, contagem de presença, broadcast, <code>has_participant</code>.</td></tr>
+    <tr><td><code>backend/app/routers/</code></td><td>HTTP/WS: auctions, auth, me (perfil/busca), uploads.</td></tr>
+    <tr><td><code>backend/prisma/schema.prisma</code></td><td>Modelo e índices; <code>UNIQUE(auction_id, idempotency_key)</code>.</td></tr>
+    <tr><td><code>frontend/src/lib/useRoom.js</code></td><td>WS + reconexão + ressincronização.</td></tr>
+    <tr><td><code>frontend/src/lib/api.js</code></td><td>Única camada que conhece a API.</td></tr>
+    <tr><td><code>deploy/Caddyfile</code> · <code>gohorses-api.service</code></td><td>Proxy/SPA e supervisão da API.</td></tr>
+  </table>
+
+  <h3>8.2 Frases de segurança (use se travar)</h3>
+  <ul>
+    <li>“O navegador só desenha; o servidor decide.”</li>
+    <li>“O banco é a fonte da verdade; o processo pode reiniciar.”</li>
+    <li>“Lance do mesmo leilão serializa; leilões diferentes rodam em paralelo.”</li>
+    <li>“Idempotência devolve o resultado original; não cria um segundo lance.”</li>
+    <li>“Correção primeiro, escala depois — e sabemos qual é o próximo gargalo.”</li>
+  </ul>
+
+  <div class="box warn">
+    <h4>O que NÃO prometer</h4>
+    <p style="margin:0">Não diga que as fotos estão na nuvem (RF07), que há múltiplas instâncias, HTTPS ou métricas. Seja explícito: são os próximos passos.</p>
+  </div>
+</section>
+
+</body>
+</html>
