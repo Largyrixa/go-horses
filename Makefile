@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help db install generate push seed setup api web build reset test test-security test-race test-features bench load
+.PHONY: help db install generate push seed setup api web build reset test test-security test-race test-features test-chat bench load
 
 help:
 	@echo "make db             - garante um Postgres em 127.0.0.1:5432 (reaproveita se já houver)"
@@ -17,6 +17,7 @@ help:
 	@echo "make test-security  - auth/autorização + SQL injection"
 	@echo "make test-race      - corridas de lances/cancelamento"
 	@echo "make test-features  - RF23 (edição), RF28 (relistagem), RF22 (perfil) e RF10"
+	@echo "make test-chat      - chat ao vivo da sala"
 	@echo "make bench          - benchmark de latência/throughput"
 	@echo "make load           - teste de carga/capacidade (ARGS=\"--mode both --users 10,50,100\")"
 
@@ -73,6 +74,9 @@ test-race:
 
 test-features:
 	cd backend && .venv/bin/python tests/test_features.py
+
+test-chat:
+	cd backend && .venv/bin/python tests/test_chat.py
 
 bench:
 	cd backend && .venv/bin/python tests/benchmark.py

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import { useRoom } from "@/lib/useRoom";
 import Button from "@/components/Button";
+import Chat from "@/components/Chat";
 import Countdown from "@/components/Countdown";
 import { ErrorNote, StatusBadge } from "@/components/ui";
 import { brl, centsToInput, fmtDateTime, fmtTime, maskName, newKey, parseCents, plural } from "@/utils/format";
@@ -16,7 +17,7 @@ export default function Sala() {
   const [wantRole, setWantRole] = useState("participant");
   // O servidor já força o comitente a espectador (RF04/RF25). A conexão usa só o papel pedido:
   // trocar o papel depois de carregar o leilão derrubava e reabria o WebSocket do comitente.
-  const { auction: a, bids, counts, connected, error, push } = useRoom(user ? id : null, wantRole);
+  const { auction: a, bids, chat, counts, connected, error, push, sendChat } = useRoom(user ? id : null, wantRole);
 
   const isSeller = !!(a && user && a.seller?.id === user.id);
   const role = isSeller ? "spectator" : wantRole;
@@ -161,6 +162,7 @@ export default function Sala() {
             </ol>
           )}
         </div>
+        <Chat messages={chat} connected={connected} currentUserId={user.id} onSend={sendChat} />
       </aside>
     </div>
   );

@@ -538,6 +538,7 @@ async def room_payload(
     *,
     participants: int,
     spectators: int,
+    chat: list[dict] | None = None,
 ) -> dict[str, Any]:
     await sync_auctions(db)
     auction = await get_auction(db, auction_id)
@@ -548,7 +549,11 @@ async def room_payload(
         take=RECENT_BIDS,
     )
     return room_state(
-        auction, bids, participants=participants, spectators=spectators
+        auction,
+        bids,
+        participants=participants,
+        spectators=spectators,
+        recent_chat=chat or [],
     )
 
 

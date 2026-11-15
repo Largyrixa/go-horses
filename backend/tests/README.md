@@ -27,7 +27,7 @@ cd backend
 ```
 
 O `run_all.py` faz um preflight em `/api/health`, executa os testes de
-autenticação, SQL injection, corridas e funcionalidades novas, e depois um
+autenticação, SQL injection, corridas, funcionalidades novas e chat, e depois um
 benchmark rápido. Retorna `0` somente se todos passarem. O teste de carga
 (`load_test.py`) **não** roda no `run_all.py`; ele é executado separadamente
 com `make load` ou diretamente.
@@ -48,6 +48,9 @@ cd backend
 
 # RF23 (edição), RF28 (relistagem), RF22 (perfil/busca) e RF10 (presença na sala)
 .venv/bin/python tests/test_features.py
+
+# Chat ao vivo da sala (WebSocket)
+.venv/bin/python tests/test_chat.py
 
 # Benchmark de latência/throughput (somente leitura por padrão)
 .venv/bin/python tests/benchmark.py
@@ -155,6 +158,12 @@ presença na sala para aceitar lances (RF10).
 - RF10: lance sem WebSocket de participante recebe `409 not_in_room`; com a
   sala aberta, o lance é aceito.
 
+### `test_chat.py`
+
+- Uma mensagem de chat enviada por um participante chega aos demais e ao
+  próprio autor (eco), com o nome mascarado e sem e-mail.
+- O `GET /auctions/{id}/room` devolve o histórico em memória da sala.
+
 ### `benchmark.py`
 
 - Mede `GET /api/health`, `/api/categories`, `/api/auctions`,
@@ -244,6 +253,7 @@ backend/tests/
 ├── test_sql_injection.py  # injeção SQL
 ├── test_race_auction.py   # concorrência de lances/cancelamento
 ├── test_features.py       # RF23/RF28/RF22/RF10
+├── test_chat.py           # chat ao vivo da sala
 ├── benchmark.py           # benchmark HTTP
 ├── load_test.py           # teste de carga/capacidade (HTTP + WebSocket)
 ├── run_all.py             # orquestrador da suíte
